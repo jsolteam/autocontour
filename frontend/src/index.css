@@ -271,3 +271,51 @@ html, body, #root {
 .fade-in {
   animation: fadeInUp 0.25s ease-out;
 }
+
+.warehouse-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 18px;
+  min-height: 100%;
+}
+
+.warehouse-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.warehouse-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-primary);
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.future-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 20px 22px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  opacity: 0.75;
+}
+
+@media (max-width: 768px) {
+  .warehouse-panel__header {
+    flex-direction: column;
+  }
+
+  .warehouse-panel__header .ant-btn {
+    width: 100%;
+    min-height: 48px;
+  }
+}

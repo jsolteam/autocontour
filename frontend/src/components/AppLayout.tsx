@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { Layout, Menu, Button, Typography, Avatar, Dropdown, Tag, Badge } from 'antd'
+import { Layout, Menu, Button, Typography, Avatar, Dropdown, Tag } from 'antd'
 import {
   DashboardOutlined, AppstoreOutlined, InboxOutlined, UserOutlined,
   LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, AuditOutlined,
   TeamOutlined, ControlOutlined, SafetyCertificateOutlined, ShopOutlined,
-  SlidersOutlined, NodeIndexOutlined, SettingOutlined,
+  SlidersOutlined, NodeIndexOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
@@ -33,6 +33,8 @@ export default function AppLayout() {
       label: 'Справочники',
       children: [
         { key: '/nomenclature', icon: <NodeIndexOutlined />, label: 'Номенклатура' },
+        { key: '/raw-material-categories', icon: <SlidersOutlined />, label: 'Категории сырья' },
+        { key: '/material-categories', icon: <SlidersOutlined />, label: 'Категории материалов' },
         { key: '/finished-products', icon: <ShopOutlined />, label: 'Готовая продукция' },
         { key: '/units', icon: <SlidersOutlined />, label: 'Единицы измерения' },
         { key: '/conversions', icon: <SlidersOutlined />, label: 'Коэффициенты' },
@@ -91,6 +93,10 @@ export default function AppLayout() {
   const pageTitles: Record<string, string> = {
     '/dashboard': 'Главная',
     '/nomenclature': 'Номенклатура',
+    '/raw-materials': 'Сырьё',
+    '/materials': 'Материалы',
+    '/raw-material-categories': 'Категории сырья',
+    '/material-categories': 'Категории материалов',
     '/finished-products': 'Готовая продукция',
     '/units': 'Единицы измерения',
     '/conversions': 'Коэффициенты перевода',
@@ -162,7 +168,7 @@ export default function AppLayout() {
             textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 10,
             letterSpacing: '0.06em',
           }}>
-            v1.0.0 · Спринт 1
+            v1.5.0 · Спринт 1.5
           </div>
         )}
       </Sider>

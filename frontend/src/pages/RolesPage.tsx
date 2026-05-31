@@ -19,6 +19,11 @@ const methodColors: Record<string, string> = {
 
 const sectionLabels: Record<string, string> = {
   nomenclature: 'Номенклатура',
+  'raw-materials': 'Сырьё',
+  materials: 'Материалы',
+  'raw-material-categories': 'Категории сырья',
+  'material-categories': 'Категории материалов',
+  'main-stock': 'Основной склад',
   'finished-products': 'Готовая продукция',
   units: 'Единицы измерения',
   conversions: 'Коэффициенты',

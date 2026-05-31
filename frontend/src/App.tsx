@@ -7,7 +7,10 @@ import ServerSetup from './pages/ServerSetup'
 import Login from './pages/Login'
 import AppLayout from './components/AppLayout'
 import Dashboard from './pages/Dashboard'
-import { UnitsPage, ConversionsPage, NomenclaturePage, FinishedProductsPage } from './pages/CatalogPages'
+import {
+  UnitsPage, ConversionsPage, NomenclaturePage, FinishedProductsPage,
+  RawMaterialCategoriesPage, MaterialCategoriesPage, RawMaterialsPage, MaterialsPage,
+} from './pages/CatalogPages'
 import UsersPage from './pages/UsersPage'
 import RolesPage from './pages/RolesPage'
 import AuditPage from './pages/AuditPage'
@@ -65,6 +68,10 @@ export default function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="nomenclature" element={<NomenclaturePage />} />
+            <Route path="raw-materials" element={<RawMaterialsPage />} />
+            <Route path="materials" element={<MaterialsPage />} />
+            <Route path="raw-material-categories" element={<RawMaterialCategoriesPage />} />
+            <Route path="material-categories" element={<MaterialCategoriesPage />} />
             <Route path="finished-products" element={<FinishedProductsPage />} />
             <Route path="units" element={<UnitsPage />} />
             <Route path="conversions" element={<ConversionsPage />} />
