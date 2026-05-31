@@ -51,6 +51,9 @@ func Migrate() {
 		&models.MainStockRaw{},
 		&models.MainStockMaterial{},
 		&models.FinishedProduct{},
+		&models.Recipe{},
+		&models.RecipeRawMaterial{},
+		&models.RecipeProductionMaterial{},
 		&models.AuditLog{},
 	)
 	if err != nil {
@@ -134,6 +137,10 @@ func seed() {
 		{Method: "POST", Path: "/api/v1/main-stock/raw"},
 		{Method: "GET", Path: "/api/v1/main-stock/materials"},
 		{Method: "POST", Path: "/api/v1/main-stock/materials"},
+		{Method: "GET", Path: "/api/v1/recipes"},
+		{Method: "POST", Path: "/api/v1/recipes"},
+		{Method: "PUT", Path: "/api/v1/recipes"},
+		{Method: "DELETE", Path: "/api/v1/recipes"},
 		{Method: "GET", Path: "/api/v1/finished-products"},
 		{Method: "POST", Path: "/api/v1/finished-products"},
 		{Method: "PUT", Path: "/api/v1/finished-products"},
@@ -154,6 +161,7 @@ func seed() {
 		{Method: "POST", Path: "/api/v1/roles"},
 		{Method: "PUT", Path: "/api/v1/roles"},
 		{Method: "DELETE", Path: "/api/v1/roles"},
+		{Method: "GET", Path: "/api/v1/permissions"},
 		{Method: "GET", Path: "/api/v1/audit"},
 	}
 	var createdPerms []models.Permission

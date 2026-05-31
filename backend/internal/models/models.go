@@ -107,6 +107,38 @@ type FinishedProduct struct {
 }
 
 // ─────────────────────────────────────────────
+//  Рецептуры
+// ─────────────────────────────────────────────
+
+type Recipe struct {
+	ID                uint                       `gorm:"primaryKey;autoIncrement" json:"id"`
+	FinishedProductID uint                       `gorm:"not null;index" json:"finished_product_id"`
+	FinishedProduct   FinishedProduct            `gorm:"foreignKey:FinishedProductID" json:"finished_product,omitempty"`
+	Name              string                     `gorm:"not null" json:"name"`
+	OutputQuantity    float64                    `gorm:"not null" json:"output_quantity"`
+	RawItems          []RecipeRawMaterial        `gorm:"foreignKey:RecipeID;constraint:OnDelete:CASCADE" json:"raw_items"`
+	MaterialItems     []RecipeProductionMaterial `gorm:"foreignKey:RecipeID;constraint:OnDelete:CASCADE" json:"material_items"`
+	CreatedAt         time.Time                  `json:"created_at"`
+	UpdatedAt         time.Time                  `json:"updated_at"`
+}
+
+type RecipeRawMaterial struct {
+	ID            uint        `gorm:"primaryKey;autoIncrement" json:"id"`
+	RecipeID      uint        `gorm:"not null;index" json:"recipe_id"`
+	RawMaterialID uint        `gorm:"not null;index" json:"raw_material_id"`
+	RawMaterial   RawMaterial `gorm:"foreignKey:RawMaterialID" json:"raw_material,omitempty"`
+	Quantity      float64     `gorm:"not null" json:"quantity"`
+}
+
+type RecipeProductionMaterial struct {
+	ID                   uint               `gorm:"primaryKey;autoIncrement" json:"id"`
+	RecipeID             uint               `gorm:"not null;index" json:"recipe_id"`
+	ProductionMaterialID uint               `gorm:"not null;index" json:"production_material_id"`
+	ProductionMaterial   ProductionMaterial `gorm:"foreignKey:ProductionMaterialID" json:"production_material,omitempty"`
+	Quantity             float64            `gorm:"not null" json:"quantity"`
+}
+
+// ─────────────────────────────────────────────
 //  Главные складские таблицы основного склада
 // ─────────────────────────────────────────────
 

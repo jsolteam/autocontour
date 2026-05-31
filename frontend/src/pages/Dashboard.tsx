@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { Row, Col, Typography, Tag, Button, Skeleton, Timeline } from 'antd'
 import {
   AppstoreOutlined, InboxOutlined, TeamOutlined, AuditOutlined,
-  ShopOutlined, SlidersOutlined, RightOutlined, ClockCircleOutlined,
+  ShopOutlined, SlidersOutlined, RightOutlined, ClockCircleOutlined, ExperimentOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
@@ -20,6 +20,7 @@ interface Stats {
   finished_products: number
   units: number
   conversions: number
+  recipes: number
   users: number
   roles: number
 }
@@ -36,7 +37,8 @@ const quickLinks: { icon: React.ReactNode; title: string; subtitle: string; path
   { icon: <AppstoreOutlined />, title: 'Номенклатура', subtitle: 'Сырьё и материалы', path: '/nomenclature', color: '#1677ff', stat: 'nomenclature' },
   { icon: <ShopOutlined />, title: 'Готовая продукция', subtitle: 'Справочник ГП', path: '/finished-products', color: '#52c41a', stat: 'finished_products' },
   { icon: <SlidersOutlined />, title: 'Единицы измерения', subtitle: 'ЕИ и коэффициенты', path: '/units', color: '#13c2c2', stat: 'units' },
-  { icon: <InboxOutlined />, title: 'Склад', subtitle: 'Остатки (Спринт 2)', path: '/warehouse', color: '#fa8c16', stat: null as string | null, disabled: true },
+  { icon: <ExperimentOutlined />, title: 'Рецепты', subtitle: 'Технологические карты', path: '/recipes', color: '#722ed1', stat: 'recipes' },
+  { icon: <InboxOutlined />, title: 'Склад', subtitle: 'Остатки', path: '/warehouse', color: '#fa8c16', stat: null as string | null },
 ]
 
 const adminLinks: { icon: React.ReactNode; title: string; subtitle: string; path: string; color: string; stat: string | null; disabled?: boolean }[] = [
@@ -67,12 +69,13 @@ export default function Dashboard() {
     const fetchAll = async () => {
       setLoading(true)
       try {
-        const [raw, materials, fp, units, conv, users, roles, logs] = await Promise.allSettled([
+        const [raw, materials, fp, units, conv, recipes, users, roles, logs] = await Promise.allSettled([
           api.get('/api/v1/raw-materials'),
           api.get('/api/v1/materials'),
           api.get('/api/v1/finished-products'),
           api.get('/api/v1/units'),
           api.get('/api/v1/conversions'),
+          api.get('/api/v1/recipes'),
           api.get('/api/v1/users'),
           api.get('/api/v1/roles'),
           api.get('/api/v1/audit'),
@@ -82,6 +85,7 @@ export default function Dashboard() {
           finished_products: fp.status === 'fulfilled' ? fp.value.data.length : 0,
           units: units.status === 'fulfilled' ? units.value.data.length : 0,
           conversions: conv.status === 'fulfilled' ? conv.value.data.length : 0,
+          recipes: recipes.status === 'fulfilled' ? recipes.value.data.length : 0,
           users: users.status === 'fulfilled' ? users.value.data.length : 0,
           roles: roles.status === 'fulfilled' ? roles.value.data.length : 0,
         })
@@ -136,7 +140,7 @@ export default function Dashboard() {
       }}>
         <ClockCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />
         <Text style={{ color: '#faad14', fontSize: 13 }}>
-          <strong>Спринт 1 завершён.</strong> Справочники и RBAC готовы. Складской учёт появится в Спринте 2.
+          <strong>Спринт 2 активен.</strong> Доступен конструктор рецептов с раздельными блоками сырья и материалов.
         </Text>
       </div>
 
@@ -150,6 +154,7 @@ export default function Dashboard() {
           { label: 'Готовая продукция', key: 'finished_products', icon: <ShopOutlined />, color: '#52c41a', path: '/finished-products' },
           { label: 'Единицы измерения', key: 'units', icon: <SlidersOutlined />, color: '#13c2c2', path: '/units' },
           { label: 'Коэффициентов', key: 'conversions', icon: <SlidersOutlined />, color: '#722ed1', path: '/conversions' },
+          { label: 'Рецепты', key: 'recipes', icon: <ExperimentOutlined />, color: '#eb2f96', path: '/recipes' },
           ...(isAdmin() ? [
             { label: 'Пользователи', key: 'users', icon: <TeamOutlined />, color: '#faad14', path: '/users' },
             { label: 'Роли', key: 'roles', icon: <AuditOutlined />, color: '#ff4d4f', path: '/roles' },

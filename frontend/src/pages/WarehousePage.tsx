@@ -112,23 +112,38 @@ export default function WarehousePage() {
               </div>
               <Button type="primary" onClick={() => openStockModal('raw')}>Задать остаток</Button>
             </div>
-            <Table
-              rowKey="id"
-              dataSource={rawStock}
-              loading={loading}
-              pagination={false}
-              size="middle"
-              columns={[
-                { title: 'Сырьё', render: (_: any, row: any) => row.raw_material?.name ?? '—' },
-                { title: 'Категория', render: (_: any, row: any) => <Tag color="cyan">{row.raw_material?.category?.name ?? '—'}</Tag> },
-                {
-                  title: 'Остаток', render: (_: any, row: any) => (
-                    <strong>{row.current_stock} {row.raw_material?.base_unit?.name}</strong>
-                  ),
-                },
-                { title: '', width: 92, render: (_: any, row: any) => <Button onClick={() => openStockModal('raw', row)}>Изменить</Button> },
-              ]}
-            />
+            <div className="desktop-table">
+              <Table
+                rowKey="id"
+                dataSource={rawStock}
+                loading={loading}
+                pagination={false}
+                size="middle"
+                scroll={{ x: true }}
+                columns={[
+                  { title: 'Сырьё', render: (_: any, row: any) => row.raw_material?.name ?? '—' },
+                  { title: 'Категория', render: (_: any, row: any) => <Tag color="cyan">{row.raw_material?.category?.name ?? '—'}</Tag> },
+                  {
+                    title: 'Остаток', render: (_: any, row: any) => (
+                      <strong>{row.current_stock} {row.raw_material?.base_unit?.name}</strong>
+                    ),
+                  },
+                  { title: '', width: 92, render: (_: any, row: any) => <Button onClick={() => openStockModal('raw', row)}>Изменить</Button> },
+                ]}
+              />
+            </div>
+            <div className="mobile-cards" style={{ flexDirection: 'column', display: 'none' }}>
+              {rawStock.map((row) => (
+                <div key={row.id} className="mobile-card-item">
+                  <div className="item-name">{row.raw_material?.name ?? '—'}</div>
+                  <div className="item-detail">Категория: {row.raw_material?.category?.name ?? '—'}</div>
+                  <div className="item-detail">Остаток: <strong>{row.current_stock} {row.raw_material?.base_unit?.name}</strong></div>
+                  <div className="item-actions">
+                    <Button onClick={() => openStockModal('raw', row)} style={{ flex: 1, height: 48 }}>Изменить</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </Col>
         <Col xs={24} lg={12}>
@@ -140,23 +155,38 @@ export default function WarehousePage() {
               </div>
               <Button type="primary" onClick={() => openStockModal('materials')}>Задать остаток</Button>
             </div>
-            <Table
-              rowKey="id"
-              dataSource={materialStock}
-              loading={loading}
-              pagination={false}
-              size="middle"
-              columns={[
-                { title: 'Материал', render: (_: any, row: any) => row.production_material?.name ?? '—' },
-                { title: 'Категория', render: (_: any, row: any) => <Tag color="purple">{row.production_material?.category?.name ?? '—'}</Tag> },
-                {
-                  title: 'Остаток', render: (_: any, row: any) => (
-                    <strong>{row.current_stock} {row.production_material?.base_unit?.name}</strong>
-                  ),
-                },
-                { title: '', width: 92, render: (_: any, row: any) => <Button onClick={() => openStockModal('materials', row)}>Изменить</Button> },
-              ]}
-            />
+            <div className="desktop-table">
+              <Table
+                rowKey="id"
+                dataSource={materialStock}
+                loading={loading}
+                pagination={false}
+                size="middle"
+                scroll={{ x: true }}
+                columns={[
+                  { title: 'Материал', render: (_: any, row: any) => row.production_material?.name ?? '—' },
+                  { title: 'Категория', render: (_: any, row: any) => <Tag color="purple">{row.production_material?.category?.name ?? '—'}</Tag> },
+                  {
+                    title: 'Остаток', render: (_: any, row: any) => (
+                      <strong>{row.current_stock} {row.production_material?.base_unit?.name}</strong>
+                    ),
+                  },
+                  { title: '', width: 92, render: (_: any, row: any) => <Button onClick={() => openStockModal('materials', row)}>Изменить</Button> },
+                ]}
+              />
+            </div>
+            <div className="mobile-cards" style={{ flexDirection: 'column', display: 'none' }}>
+              {materialStock.map((row) => (
+                <div key={row.id} className="mobile-card-item">
+                  <div className="item-name">{row.production_material?.name ?? '—'}</div>
+                  <div className="item-detail">Категория: {row.production_material?.category?.name ?? '—'}</div>
+                  <div className="item-detail">Остаток: <strong>{row.current_stock} {row.production_material?.base_unit?.name}</strong></div>
+                  <div className="item-actions">
+                    <Button onClick={() => openStockModal('materials', row)} style={{ flex: 1, height: 48 }}>Изменить</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </Col>
       </Row>

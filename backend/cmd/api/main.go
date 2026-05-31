@@ -83,6 +83,13 @@ func main() {
 	api.PUT("/finished-products/:id", handlers.UpdateFinishedProduct)
 	api.DELETE("/finished-products/:id", handlers.DeleteFinishedProduct)
 
+	// Recipes
+	api.GET("/recipes", handlers.ListRecipes)
+	api.GET("/recipes/:id", handlers.GetRecipe)
+	api.POST("/recipes", handlers.CreateRecipe)
+	api.PUT("/recipes/:id", handlers.UpdateRecipe)
+	api.DELETE("/recipes/:id", handlers.DeleteRecipe)
+
 	// Users & Roles (Admin only via RBAC)
 	api.GET("/users", handlers.ListUsers)
 	api.POST("/users", handlers.CreateUser)

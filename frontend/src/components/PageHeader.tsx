@@ -39,7 +39,7 @@ export default function PageHeader({ title, subtitle, crumbs, action, badge }: P
           ]}
         />
       )}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+      <div className="page-header-row" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text-primary)', margin: 0, letterSpacing: '-0.02em' }}>
@@ -53,7 +53,7 @@ export default function PageHeader({ title, subtitle, crumbs, action, badge }: P
             </Text>
           )}
         </div>
-        {action && <div style={{ flexShrink: 0 }}>{action}</div>}
+        {action && <div className="page-header-action" style={{ flexShrink: 0 }}>{action}</div>}
       </div>
       <div style={{ height: 1, background: 'var(--color-border)', marginTop: 16 }} />
     </div>
