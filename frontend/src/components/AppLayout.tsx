@@ -1,10 +1,10 @@
-import { useState } from 'react'
-import { Layout, Menu, Button, Typography, Avatar, Dropdown, Tag, Badge } from 'antd'
+import { useEffect, useState } from 'react'
+import { Layout, Menu, Button, Typography, Avatar, Dropdown, Tag, Grid } from 'antd'
 import {
   DashboardOutlined, AppstoreOutlined, InboxOutlined, UserOutlined,
   LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, AuditOutlined,
   TeamOutlined, ControlOutlined, SafetyCertificateOutlined, ShopOutlined,
-  SlidersOutlined, NodeIndexOutlined, SettingOutlined,
+  SlidersOutlined, NodeIndexOutlined, ExperimentOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
@@ -13,12 +13,21 @@ const { Sider, Content, Header } = Layout
 const { Text } = Typography
 
 export default function AppLayout() {
+  const screens = Grid.useBreakpoint()
+  const isMobile = screens.md === false
   const [collapsed, setCollapsed] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout, isAdmin } = useAuthStore()
 
-  const handleMenuClick = ({ key }: { key: string }) => navigate(key)
+  useEffect(() => {
+    if (isMobile) setCollapsed(true)
+  }, [isMobile])
+
+  const handleMenuClick = ({ key }: { key: string }) => {
+    navigate(key)
+    if (isMobile) setCollapsed(true)
+  }
 
   // Build menu items based on role
   const navItems = [
@@ -33,10 +42,17 @@ export default function AppLayout() {
       label: 'Справочники',
       children: [
         { key: '/nomenclature', icon: <NodeIndexOutlined />, label: 'Номенклатура' },
+        { key: '/raw-material-categories', icon: <SlidersOutlined />, label: 'Категории сырья' },
+        { key: '/material-categories', icon: <SlidersOutlined />, label: 'Категории материалов' },
         { key: '/finished-products', icon: <ShopOutlined />, label: 'Готовая продукция' },
         { key: '/units', icon: <SlidersOutlined />, label: 'Единицы измерения' },
         { key: '/conversions', icon: <SlidersOutlined />, label: 'Коэффициенты' },
       ],
+    },
+    {
+      key: '/recipes',
+      icon: <ExperimentOutlined />,
+      label: 'Рецепты',
     },
     {
       key: '/warehouse',
@@ -91,10 +107,15 @@ export default function AppLayout() {
   const pageTitles: Record<string, string> = {
     '/dashboard': 'Главная',
     '/nomenclature': 'Номенклатура',
+    '/raw-materials': 'Сырьё',
+    '/materials': 'Материалы',
+    '/raw-material-categories': 'Категории сырья',
+    '/material-categories': 'Категории материалов',
     '/finished-products': 'Готовая продукция',
     '/units': 'Единицы измерения',
     '/conversions': 'Коэффициенты перевода',
     '/warehouse': 'Склад',
+    '/recipes': 'Рецепты',
     '/users': 'Пользователи',
     '/roles': 'Роли и права',
     '/audit': 'Журнал действий',
@@ -107,11 +128,15 @@ export default function AppLayout() {
         collapsed={collapsed}
         onCollapse={setCollapsed}
         trigger={null}
-        width={224}
-        collapsedWidth={64}
+        width={isMobile ? 260 : 224}
+        collapsedWidth={isMobile ? 0 : 64}
         style={{
           position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 100,
-          overflow: 'auto', borderRight: '1px solid var(--color-border)',
+          overflow: 'hidden', borderRight: '1px solid var(--color-border)',
+          display: 'flex', flexDirection: 'column',
+          transform: isMobile && collapsed ? 'translateX(-100%)' : 'translateX(0)',
+          transition: 'transform 0.2s, width 0.2s',
+          boxShadow: isMobile && !collapsed ? '0 0 0 9999px rgba(0,0,0,0.45)' : undefined,
         }}
       >
         {/* Logo */}
@@ -152,27 +177,34 @@ export default function AppLayout() {
           defaultOpenKeys={['catalogs', 'admin']}
           items={navItems}
           onClick={handleMenuClick}
-          style={{ border: 'none', background: 'transparent' }}
+          style={{ border: 'none', background: 'transparent', flex: 1, overflowY: 'auto' }}
         />
 
         {/* Version tag at bottom */}
         {!collapsed && (
           <div style={{
-            position: 'absolute', bottom: 16, left: 0, right: 0,
             textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 10,
-            letterSpacing: '0.06em',
+            letterSpacing: '0.06em', padding: '12px 8px',
+            borderTop: '1px solid var(--color-border)', flexShrink: 0,
           }}>
-            v1.0.0 · Спринт 1
+            v1.5.0 · Спринт 1.5
           </div>
         )}
       </Sider>
 
-      <Layout style={{ marginLeft: collapsed ? 64 : 224, transition: 'margin 0.2s' }}>
+      {isMobile && !collapsed && (
+        <div
+          onClick={() => setCollapsed(true)}
+          style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'rgba(0,0,0,0.35)' }}
+        />
+      )}
+
+      <Layout style={{ marginLeft: isMobile ? 0 : (collapsed ? 64 : 224), transition: 'margin 0.2s' }}>
         {/* Top header */}
         <Header style={{
           background: 'var(--color-surface)',
           borderBottom: '1px solid var(--color-border)',
-          padding: '0 20px',
+          padding: isMobile ? '0 12px' : '0 20px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           position: 'sticky', top: 0, zIndex: 99, height: 56,
           gap: 16,
@@ -184,7 +216,7 @@ export default function AppLayout() {
               onClick={() => setCollapsed(!collapsed)}
               style={{ color: 'var(--color-text-secondary)', fontSize: 16, width: 36, height: 36, padding: 0 }}
             />
-            <Text style={{ color: 'var(--color-text-secondary)', fontSize: 14, display: 'none' as any }}
+            <Text style={{ color: 'var(--color-text-secondary)', fontSize: 14, display: isMobile ? 'inline' : 'none' }}
               className="page-title-header">
               {pageTitles[location.pathname] || ''}
             </Text>
@@ -211,7 +243,7 @@ export default function AppLayout() {
                 icon={<UserOutlined />}
                 style={{ background: 'rgba(22,119,255,0.18)', color: 'var(--color-accent)', flexShrink: 0 }}
               />
-              <div style={{ lineHeight: 1.3 }}>
+              <div style={{ lineHeight: 1.3, display: isMobile ? 'none' : 'block' }}>
                 <div style={{ fontSize: 13, color: 'var(--color-text-primary)', fontWeight: 500 }}>
                   {user?.full_name || user?.login}
                 </div>
@@ -223,7 +255,7 @@ export default function AppLayout() {
           </Dropdown>
         </Header>
 
-        <Content style={{ padding: 24, minHeight: 'calc(100vh - 56px)', overflow: 'auto' }}>
+        <Content style={{ padding: isMobile ? 12 : 24, minHeight: 'calc(100vh - 56px)', overflow: 'auto' }}>
           <div className="fade-in">
             <Outlet />
           </div>

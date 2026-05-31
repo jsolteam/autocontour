@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
   Table, Button, Modal, Form, Input, InputNumber, Select,
-  Space, Popconfirm, message, Typography,
+  Space, Popconfirm, message, Typography, Checkbox,
 } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons'
 import type { ColumnType } from 'antd/es/table'
@@ -14,7 +14,7 @@ const { Text } = Typography
 export interface FieldDef {
   key: string
   label: string
-  type: 'text' | 'number' | 'select' | 'select-remote'
+  type: 'text' | 'number' | 'select' | 'select-remote' | 'checkbox'
   required?: boolean
   min?: number
   placeholder?: string
@@ -27,6 +27,8 @@ export interface FieldDef {
   hideInForm?: boolean
   searchable?: boolean
   formSpan?: number
+  showWhen?: (values: any, remoteOptions: Record<string, any[]>) => boolean
+  normalizePayload?: (values: any) => void
 }
 
 interface Props {
@@ -87,6 +89,9 @@ export default function CatalogPage({
     setEditRecord(record)
     const values: any = {}
     fields.forEach((f) => { values[f.key] = record[f.key] })
+    if ('capacity_value' in record || 'capacity_unit_id' in record) {
+      values.has_capacity = record.capacity_value != null && record.capacity_unit_id != null
+    }
     form.setFieldsValue(values)
     setModalOpen(true)
   }
@@ -94,6 +99,7 @@ export default function CatalogPage({
   const handleSave = async () => {
     try {
       const values = await form.validateFields()
+      fields.forEach((field) => field.normalizePayload?.(values))
       if (editRecord) {
         await api.put(`${apiPath}/${editRecord[rowKey]}`, values)
         message.success('Запись обновлена')
@@ -296,43 +302,52 @@ export default function CatalogPage({
       >
         <Form form={form} layout="vertical" style={{ marginTop: 20 }}>
           {fields.filter((f) => !f.hideInForm).map((f) => (
-            <Form.Item
-              key={f.key}
-              name={f.key}
-              label={f.label}
-              rules={f.required !== false ? [{ required: true, message: `Заполните поле «${f.label}»` }] : []}
-            >
-              {f.type === 'text' ? (
-                <Input size="large" placeholder={f.placeholder || f.label} />
-              ) : f.type === 'number' ? (
-                <InputNumber
-                  size="large"
-                  style={{ width: '100%' }}
-                  min={f.min ?? 1}
-                  step={1}
-                  placeholder={f.placeholder}
-                />
-              ) : f.type === 'select' ? (
-                <Select
-                  size="large"
-                  showSearch
-                  optionFilterProp="label"
-                  options={f.selectOptions}
-                  placeholder={f.placeholder || `Выберите ${f.label}`}
-                />
-              ) : (
-                <Select
-                  size="large"
-                  showSearch
-                  allowClear={f.required === false}
-                  optionFilterProp="label"
-                  placeholder={f.placeholder || `Выберите ${f.label}`}
-                  options={(remoteOptions[f.key] || []).map((opt) => ({
-                    label: opt[f.remoteLabel || 'name'],
-                    value: opt[f.remoteValue || 'id'],
-                  }))}
-                />
-              )}
+            <Form.Item noStyle shouldUpdate key={f.key}>
+              {({ getFieldsValue }) => {
+                if (f.showWhen && !f.showWhen(getFieldsValue(true), remoteOptions)) return null
+                return (
+                  <Form.Item
+                    name={f.key}
+                    label={f.type === 'checkbox' ? undefined : f.label}
+                    valuePropName={f.type === 'checkbox' ? 'checked' : undefined}
+                    rules={f.required !== false && f.type !== 'checkbox' ? [{ required: true, message: `Заполните поле «${f.label}»` }] : []}
+                  >
+                    {f.type === 'text' ? (
+                      <Input size="large" placeholder={f.placeholder || f.label} />
+                    ) : f.type === 'number' ? (
+                      <InputNumber
+                        size="large"
+                        style={{ width: '100%' }}
+                        min={f.min ?? 1}
+                        step={f.min && f.min < 1 ? 0.1 : 1}
+                        placeholder={f.placeholder}
+                      />
+                    ) : f.type === 'checkbox' ? (
+                      <Checkbox>{f.label}</Checkbox>
+                    ) : f.type === 'select' ? (
+                      <Select
+                        size="large"
+                        showSearch
+                        optionFilterProp="label"
+                        options={f.selectOptions}
+                        placeholder={f.placeholder || `Выберите ${f.label}`}
+                      />
+                    ) : (
+                      <Select
+                        size="large"
+                        showSearch
+                        allowClear={f.required === false}
+                        optionFilterProp="label"
+                        placeholder={f.placeholder || `Выберите ${f.label}`}
+                        options={(remoteOptions[f.key] || []).map((opt) => ({
+                          label: opt[f.remoteLabel || 'name'],
+                          value: opt[f.remoteValue || 'id'],
+                        }))}
+                      />
+                    )}
+                  </Form.Item>
+                )
+              }}
             </Form.Item>
           ))}
         </Form>

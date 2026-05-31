@@ -1,21 +1,16 @@
-import { Row, Col, Typography, Tag, Button } from 'antd'
+import { useEffect, useState, useCallback } from 'react'
+import { Row, Col, Typography, Tag, Button, Table, InputNumber, Modal, Form, Select, message } from 'antd'
 import {
   InboxOutlined, NodeIndexOutlined, ShopOutlined,
-  ExperimentOutlined, ArrowRightOutlined, LockOutlined,
+  ExperimentOutlined, ArrowRightOutlined, DatabaseOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '../components/PageHeader'
+import { api } from '../utils/api'
 
 const { Text } = Typography
 
-const sprint2Features = [
-  {
-    icon: <InboxOutlined />,
-    color: '#1677ff',
-    title: 'Основной склад сырья',
-    description: 'Учёт остатков всех материалов и номенклатуры с валидацией минуса',
-    sprint: 2,
-  },
+const futureFeatures = [
   {
     icon: <ShopOutlined />,
     color: '#52c41a',
@@ -27,7 +22,7 @@ const sprint2Features = [
     icon: <NodeIndexOutlined />,
     color: '#fa8c16',
     title: 'Склад производства (цеховой)',
-    description: 'Виртуальный склад для сырья, переданного в цех',
+    description: 'Виртуальные склады сырья и материалов, переданных в цех',
     sprint: 3,
   },
   {
@@ -41,66 +36,195 @@ const sprint2Features = [
 
 export default function WarehousePage() {
   const navigate = useNavigate()
+  const [rawStock, setRawStock] = useState<any[]>([])
+  const [materialStock, setMaterialStock] = useState<any[]>([])
+  const [rawMaterials, setRawMaterials] = useState<any[]>([])
+  const [materials, setMaterials] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [modalType, setModalType] = useState<'raw' | 'materials' | null>(null)
+  const [form] = Form.useForm()
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [rawStockRes, materialStockRes, rawRes, materialsRes] = await Promise.all([
+        api.get('/api/v1/main-stock/raw'),
+        api.get('/api/v1/main-stock/materials'),
+        api.get('/api/v1/raw-materials'),
+        api.get('/api/v1/materials'),
+      ])
+      setRawStock(rawStockRes.data)
+      setMaterialStock(materialStockRes.data)
+      setRawMaterials(rawRes.data)
+      setMaterials(materialsRes.data)
+    } catch (e: any) {
+      message.error(e?.response?.data?.error || 'Ошибка загрузки складских остатков')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  const openStockModal = (type: 'raw' | 'materials', record?: any) => {
+    setModalType(type)
+    form.resetFields()
+    if (record) {
+      form.setFieldsValue({
+        item_id: type === 'raw' ? record.raw_material_id : record.production_material_id,
+        current_stock: record.current_stock,
+      })
+    }
+  }
+
+  const saveStock = async () => {
+    if (!modalType) return
+    try {
+      const values = await form.validateFields()
+      const payload = modalType === 'raw'
+        ? { raw_material_id: values.item_id, current_stock: values.current_stock }
+        : { production_material_id: values.item_id, current_stock: values.current_stock }
+      await api.post(modalType === 'raw' ? '/api/v1/main-stock/raw' : '/api/v1/main-stock/materials', payload)
+      message.success('Остаток обновлён')
+      setModalType(null)
+      fetchData()
+    } catch (e: any) {
+      if (e?.response?.data?.error) message.error(e.response.data.error)
+    }
+  }
 
   return (
     <div>
       <PageHeader
         title="Складской учёт"
-        subtitle="Этот раздел будет реализован в Спринтах 2–4"
+        subtitle="Спринт 1.5: основные склады сырья и материалов полностью разделены"
         crumbs={[{ label: 'Склад' }]}
-        badge={<Tag color="warning">В разработке</Tag>}
+        badge={<Tag color="processing">Изоляция потоков</Tag>}
       />
 
-      {/* Roadmap banner */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 28 }}>
+        <Col xs={24} lg={12}>
+          <div className="warehouse-panel">
+            <div className="warehouse-panel__header">
+              <div>
+                <div className="warehouse-panel__title"><InboxOutlined /> Основной склад сырья</div>
+                <Text type="secondary">Химические компоненты, жидкости и реактивы в базовых ЕИ.</Text>
+              </div>
+              <Button type="primary" onClick={() => openStockModal('raw')}>Задать остаток</Button>
+            </div>
+            <div className="desktop-table">
+              <Table
+                rowKey="id"
+                dataSource={rawStock}
+                loading={loading}
+                pagination={false}
+                size="middle"
+                scroll={{ x: true }}
+                columns={[
+                  { title: 'Сырьё', render: (_: any, row: any) => row.raw_material?.name ?? '—' },
+                  { title: 'Категория', render: (_: any, row: any) => <Tag color="cyan">{row.raw_material?.category?.name ?? '—'}</Tag> },
+                  {
+                    title: 'Остаток', render: (_: any, row: any) => (
+                      <strong>{row.current_stock} {row.raw_material?.base_unit?.name}</strong>
+                    ),
+                  },
+                  { title: '', width: 92, render: (_: any, row: any) => <Button onClick={() => openStockModal('raw', row)}>Изменить</Button> },
+                ]}
+              />
+            </div>
+            <div className="mobile-cards" style={{ flexDirection: 'column', display: 'none' }}>
+              {rawStock.map((row) => (
+                <div key={row.id} className="mobile-card-item">
+                  <div className="item-name">{row.raw_material?.name ?? '—'}</div>
+                  <div className="item-detail">Категория: {row.raw_material?.category?.name ?? '—'}</div>
+                  <div className="item-detail">Остаток: <strong>{row.current_stock} {row.raw_material?.base_unit?.name}</strong></div>
+                  <div className="item-actions">
+                    <Button onClick={() => openStockModal('raw', row)} style={{ flex: 1, height: 48 }}>Изменить</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Col>
+        <Col xs={24} lg={12}>
+          <div className="warehouse-panel">
+            <div className="warehouse-panel__header">
+              <div>
+                <div className="warehouse-panel__title"><DatabaseOutlined /> Основной склад материалов</div>
+                <Text type="secondary">Тара, крышки, этикетки, коробки и паллеты в собственном потоке.</Text>
+              </div>
+              <Button type="primary" onClick={() => openStockModal('materials')}>Задать остаток</Button>
+            </div>
+            <div className="desktop-table">
+              <Table
+                rowKey="id"
+                dataSource={materialStock}
+                loading={loading}
+                pagination={false}
+                size="middle"
+                scroll={{ x: true }}
+                columns={[
+                  { title: 'Материал', render: (_: any, row: any) => row.production_material?.name ?? '—' },
+                  { title: 'Категория', render: (_: any, row: any) => <Tag color="purple">{row.production_material?.category?.name ?? '—'}</Tag> },
+                  {
+                    title: 'Остаток', render: (_: any, row: any) => (
+                      <strong>{row.current_stock} {row.production_material?.base_unit?.name}</strong>
+                    ),
+                  },
+                  { title: '', width: 92, render: (_: any, row: any) => <Button onClick={() => openStockModal('materials', row)}>Изменить</Button> },
+                ]}
+              />
+            </div>
+            <div className="mobile-cards" style={{ flexDirection: 'column', display: 'none' }}>
+              {materialStock.map((row) => (
+                <div key={row.id} className="mobile-card-item">
+                  <div className="item-name">{row.production_material?.name ?? '—'}</div>
+                  <div className="item-detail">Категория: {row.production_material?.category?.name ?? '—'}</div>
+                  <div className="item-detail">Остаток: <strong>{row.current_stock} {row.production_material?.base_unit?.name}</strong></div>
+                  <div className="item-actions">
+                    <Button onClick={() => openStockModal('materials', row)} style={{ flex: 1, height: 48 }}>Изменить</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Col>
+      </Row>
+
       <div style={{
-        background: 'linear-gradient(135deg, rgba(250,173,20,0.08), rgba(250,173,20,0.03))',
-        border: '1px solid rgba(250,173,20,0.2)',
+        background: 'linear-gradient(135deg, rgba(22,119,255,0.08), rgba(22,119,255,0.03))',
+        border: '1px solid rgba(22,119,255,0.2)',
         borderRadius: 12,
-        padding: '24px 28px',
+        padding: '20px 24px',
         marginBottom: 28,
         display: 'flex', alignItems: 'flex-start', gap: 16,
       }}>
-        <LockOutlined style={{ fontSize: 24, color: '#faad14', flexShrink: 0, marginTop: 2 }} />
+        <ArrowRightOutlined style={{ fontSize: 22, color: '#1677ff', flexShrink: 0, marginTop: 2 }} />
         <div>
           <div style={{ fontWeight: 700, color: '#fff', fontSize: 16, marginBottom: 6 }}>
-            Раздел находится в разработке
+            Потоки больше не пересекаются
           </div>
           <Text style={{ color: 'var(--color-text-secondary)', fontSize: 14 }}>
-            Складской учёт, накладные, списание сырья и управление производством появятся в следующих спринтах.
-            Пока вы можете наполнить справочники, которые будут использоваться при складских операциях.
+            Приходы и будущие производственные операции будут обращаться к отдельным таблицам сырья и материалов.
+            Номенклатура выбирается только из соответствующего справочника — ручной ввод исключён.
           </Text>
           <div style={{ marginTop: 14 }}>
-            <Button
-              type="primary"
-              icon={<ArrowRightOutlined />}
-              onClick={() => navigate('/nomenclature')}
-              style={{ marginRight: 8 }}
-            >
-              Заполнить номенклатуру
+            <Button type="primary" onClick={() => navigate('/raw-materials')} style={{ marginRight: 8 }}>
+              Справочник сырья
             </Button>
-            <Button onClick={() => navigate('/finished-products')}>
-              Готовая продукция
-            </Button>
+            <Button onClick={() => navigate('/materials')}>Справочник материалов</Button>
           </div>
         </div>
       </div>
 
-      {/* Sprint roadmap */}
       <div style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>
-        Дорожная карта
+        Следующие спринты
       </div>
 
       <Row gutter={[16, 16]}>
-        {sprint2Features.map((f) => (
-          <Col xs={24} sm={12} key={f.title}>
-            <div style={{
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 10,
-              padding: '20px 22px',
-              display: 'flex', gap: 16, alignItems: 'flex-start',
-              opacity: 0.75,
-            }}>
+        {futureFeatures.map((f) => (
+          <Col xs={24} sm={12} lg={8} key={f.title}>
+            <div className="future-card">
               <div style={{
                 width: 44, height: 44, borderRadius: 10, flexShrink: 0,
                 background: `${f.color}15`, border: `1px solid ${f.color}25`,
@@ -123,25 +247,31 @@ export default function WarehousePage() {
         ))}
       </Row>
 
-      {/* Current state - what's done */}
-      <div style={{ marginTop: 32 }}>
-        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>
-          Спринт 1 — завершён ✓
-        </div>
-        <div style={{
-          display: 'flex', flexWrap: 'wrap', gap: 10,
-        }}>
-          {[
-            'Авторизация JWT', 'Динамические роли RBAC', 'Справочник номенклатуры',
-            'Готовая продукция', 'Единицы измерения', 'Коэффициенты перевода',
-            'Управление пользователями', 'Журнал аудита', 'Адаптивный интерфейс',
-          ].map((item) => (
-            <Tag key={item} color="success" style={{ padding: '4px 10px', fontSize: 13 }}>
-              ✓ {item}
-            </Tag>
-          ))}
-        </div>
-      </div>
+      <Modal
+        title={modalType === 'raw' ? 'Остаток основного склада сырья' : 'Остаток основного склада материалов'}
+        open={modalType !== null}
+        onOk={saveStock}
+        onCancel={() => setModalType(null)}
+        okText="Сохранить"
+        cancelText="Отмена"
+        okButtonProps={{ size: 'large', style: { height: 48 } }}
+        cancelButtonProps={{ size: 'large', style: { height: 48 } }}
+      >
+        <Form form={form} layout="vertical" style={{ marginTop: 20 }}>
+          <Form.Item name="item_id" label={modalType === 'raw' ? 'Сырьё' : 'Материал'} rules={[{ required: true, message: 'Выберите позицию' }]}>
+            <Select
+              size="large"
+              showSearch
+              optionFilterProp="label"
+              placeholder="Выберите из справочника"
+              options={(modalType === 'raw' ? rawMaterials : materials).map((item) => ({ label: item.name, value: item.id }))}
+            />
+          </Form.Item>
+          <Form.Item name="current_stock" label="Текущий остаток" rules={[{ required: true, message: 'Укажите остаток' }]}>
+            <InputNumber size="large" style={{ width: '100%' }} min={0} step={0.1} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   )
 }

@@ -48,12 +48,33 @@ func main() {
 	api.PUT("/conversions/:id", handlers.UpdateConversion)
 	api.DELETE("/conversions/:id", handlers.DeleteConversion)
 
-	// Nomenclature
-	api.GET("/nomenclature", handlers.ListNomenclature)
-	api.GET("/nomenclature/:id", handlers.GetNomenclature)
-	api.POST("/nomenclature", handlers.CreateNomenclature)
-	api.PUT("/nomenclature/:id", handlers.UpdateNomenclature)
-	api.DELETE("/nomenclature/:id", handlers.DeleteNomenclature)
+	// Isolated raw material and production material catalogs
+	api.GET("/raw-material-categories", handlers.ListRawMaterialCategories)
+	api.POST("/raw-material-categories", handlers.CreateRawMaterialCategory)
+	api.PUT("/raw-material-categories/:id", handlers.UpdateRawMaterialCategory)
+	api.DELETE("/raw-material-categories/:id", handlers.DeleteRawMaterialCategory)
+
+	api.GET("/material-categories", handlers.ListProductionMaterialCategories)
+	api.POST("/material-categories", handlers.CreateProductionMaterialCategory)
+	api.PUT("/material-categories/:id", handlers.UpdateProductionMaterialCategory)
+	api.DELETE("/material-categories/:id", handlers.DeleteProductionMaterialCategory)
+
+	api.GET("/raw-materials", handlers.ListRawMaterials)
+	api.GET("/raw-materials/:id", handlers.GetRawMaterial)
+	api.POST("/raw-materials", handlers.CreateRawMaterial)
+	api.PUT("/raw-materials/:id", handlers.UpdateRawMaterial)
+	api.DELETE("/raw-materials/:id", handlers.DeleteRawMaterial)
+
+	api.GET("/materials", handlers.ListProductionMaterials)
+	api.GET("/materials/:id", handlers.GetProductionMaterial)
+	api.POST("/materials", handlers.CreateProductionMaterial)
+	api.PUT("/materials/:id", handlers.UpdateProductionMaterial)
+	api.DELETE("/materials/:id", handlers.DeleteProductionMaterial)
+
+	api.GET("/main-stock/raw", handlers.ListMainStockRaw)
+	api.POST("/main-stock/raw", handlers.UpsertMainStockRaw)
+	api.GET("/main-stock/materials", handlers.ListMainStockMaterials)
+	api.POST("/main-stock/materials", handlers.UpsertMainStockMaterial)
 
 	// Finished Products
 	api.GET("/finished-products", handlers.ListFinishedProducts)
@@ -61,6 +82,13 @@ func main() {
 	api.POST("/finished-products", handlers.CreateFinishedProduct)
 	api.PUT("/finished-products/:id", handlers.UpdateFinishedProduct)
 	api.DELETE("/finished-products/:id", handlers.DeleteFinishedProduct)
+
+	// Recipes
+	api.GET("/recipes", handlers.ListRecipes)
+	api.GET("/recipes/:id", handlers.GetRecipe)
+	api.POST("/recipes", handlers.CreateRecipe)
+	api.PUT("/recipes/:id", handlers.UpdateRecipe)
+	api.DELETE("/recipes/:id", handlers.DeleteRecipe)
 
 	// Users & Roles (Admin only via RBAC)
 	api.GET("/users", handlers.ListUsers)

@@ -19,11 +19,18 @@ const methodColors: Record<string, string> = {
 
 const sectionLabels: Record<string, string> = {
   nomenclature: 'Номенклатура',
+  'raw-materials': 'Сырьё',
+  materials: 'Материалы',
+  'raw-material-categories': 'Категории сырья',
+  'material-categories': 'Категории материалов',
+  'main-stock': 'Основной склад',
   'finished-products': 'Готовая продукция',
   units: 'Единицы измерения',
   conversions: 'Коэффициенты',
+  recipes: 'Рецепты',
   users: 'Пользователи',
   roles: 'Роли',
+  permissions: 'Права доступа',
   audit: 'Журнал аудита',
 }
 
@@ -184,11 +191,40 @@ export default function RolesPage() {
           action={{ label: 'Создать первую роль', onClick: openCreate }}
         />
       ) : (
-        <Table
-          dataSource={roles} columns={columns} rowKey="id" loading={loading}
-          size="middle" pagination={false}
-          style={{ background: 'var(--color-surface)', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--color-border)' }}
-        />
+        <>
+          <div className="desktop-table">
+            <Table
+              dataSource={roles} columns={columns} rowKey="id" loading={loading}
+              size="middle" pagination={false} scroll={{ x: true }}
+              style={{ background: 'var(--color-surface)', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--color-border)' }}
+            />
+          </div>
+          <div className="mobile-cards" style={{ flexDirection: 'column', display: 'none' }}>
+            {roles.map((role) => {
+              const sections = [...new Set(role.permissions?.map((perm) => perm.path.split('/')[3]).filter(Boolean))]
+              return (
+                <div key={role.id} className="mobile-card-item">
+                  <div className="item-name">{role.name}</div>
+                  <div className="item-detail">Прав доступа: {role.permissions?.length || 0}</div>
+                  <div className="item-detail">
+                    Разделы:
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                      {sections.length > 0 ? sections.map((section) => (
+                        <Tag key={section} style={{ margin: 0 }}>{sectionLabels[section] || section}</Tag>
+                      )) : <span style={{ color: 'var(--color-text-muted)' }}>нет доступа</span>}
+                    </div>
+                  </div>
+                  <div className="item-actions">
+                    <Button icon={<EditOutlined />} onClick={() => openEdit(role)} style={{ flex: 1, height: 48 }}>Изменить</Button>
+                    <Popconfirm title="Удалить?" onConfirm={() => handleDelete(role)} okText="Да" cancelText="Нет">
+                      <Button danger icon={<DeleteOutlined />} style={{ height: 48, width: 48 }} />
+                    </Popconfirm>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
       )}
 
       <Modal

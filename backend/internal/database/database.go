@@ -36,14 +36,24 @@ func Connect() {
 }
 
 func Migrate() {
+	cleanupLegacyNomenclature()
+
 	err := DB.AutoMigrate(
 		&models.Permission{},
 		&models.Role{},
 		&models.User{},
 		&models.UnitOfMeasure{},
+		&models.RawMaterialCategory{},
+		&models.ProductionMaterialCategory{},
+		&models.RawMaterial{},
+		&models.ProductionMaterial{},
 		&models.UnitConversion{},
-		&models.Nomenclature{},
+		&models.MainStockRaw{},
+		&models.MainStockMaterial{},
 		&models.FinishedProduct{},
+		&models.Recipe{},
+		&models.RecipeRawMaterial{},
+		&models.RecipeProductionMaterial{},
 		&models.AuditLog{},
 	)
 	if err != nil {
@@ -52,6 +62,40 @@ func Migrate() {
 	log.Println("✅ Миграции применены")
 
 	seed()
+}
+
+func cleanupLegacyNomenclature() {
+	DB.Exec("ALTER TABLE unit_conversions DROP CONSTRAINT IF EXISTS fk_unit_conversions_nomenclature")
+	DB.Exec("ALTER TABLE unit_conversions DROP COLUMN IF EXISTS nomenclature_id")
+	DB.Exec("ALTER TABLE conversion_rates DROP CONSTRAINT IF EXISTS fk_unit_conversions_nomenclature")
+	DB.Exec("ALTER TABLE conversion_rates DROP COLUMN IF EXISTS nomenclature_id")
+	DB.Exec("DROP TABLE IF EXISTS nomenclatures")
+}
+
+func seedCategories() {
+	rawCategories := []models.RawMaterialCategory{
+		{Name: "ПАВ"},
+		{Name: "Кислоты"},
+		{Name: "Отдушки"},
+		{Name: "Вода"},
+		{Name: "Прочее сырьё"},
+	}
+	for _, cat := range rawCategories {
+		DB.Where("name = ?", cat.Name).FirstOrCreate(&cat)
+	}
+
+	materialCategories := []models.ProductionMaterialCategory{
+		{Name: "Флаконы", SupportsCapacity: true},
+		{Name: "Канистры пустые", SupportsCapacity: true},
+		{Name: "Коробки", SupportsCapacity: true},
+		{Name: "Паллеты", SupportsCapacity: true},
+		{Name: "Крышки", SupportsCapacity: false},
+		{Name: "Этикетки", SupportsCapacity: false},
+		{Name: "Прочие материалы", SupportsCapacity: false},
+	}
+	for _, cat := range materialCategories {
+		DB.Where("name = ?", cat.Name).FirstOrCreate(&cat)
+	}
 }
 
 func seed() {
@@ -69,12 +113,34 @@ func seed() {
 		DB.Where("name = ?", u.Name).FirstOrCreate(&u)
 	}
 
+	seedCategories()
+
 	// Права доступа
 	permissions := []models.Permission{
-		{Method: "GET", Path: "/api/v1/nomenclature"},
-		{Method: "POST", Path: "/api/v1/nomenclature"},
-		{Method: "PUT", Path: "/api/v1/nomenclature"},
-		{Method: "DELETE", Path: "/api/v1/nomenclature"},
+		{Method: "GET", Path: "/api/v1/raw-material-categories"},
+		{Method: "POST", Path: "/api/v1/raw-material-categories"},
+		{Method: "PUT", Path: "/api/v1/raw-material-categories"},
+		{Method: "DELETE", Path: "/api/v1/raw-material-categories"},
+		{Method: "GET", Path: "/api/v1/material-categories"},
+		{Method: "POST", Path: "/api/v1/material-categories"},
+		{Method: "PUT", Path: "/api/v1/material-categories"},
+		{Method: "DELETE", Path: "/api/v1/material-categories"},
+		{Method: "GET", Path: "/api/v1/raw-materials"},
+		{Method: "POST", Path: "/api/v1/raw-materials"},
+		{Method: "PUT", Path: "/api/v1/raw-materials"},
+		{Method: "DELETE", Path: "/api/v1/raw-materials"},
+		{Method: "GET", Path: "/api/v1/materials"},
+		{Method: "POST", Path: "/api/v1/materials"},
+		{Method: "PUT", Path: "/api/v1/materials"},
+		{Method: "DELETE", Path: "/api/v1/materials"},
+		{Method: "GET", Path: "/api/v1/main-stock/raw"},
+		{Method: "POST", Path: "/api/v1/main-stock/raw"},
+		{Method: "GET", Path: "/api/v1/main-stock/materials"},
+		{Method: "POST", Path: "/api/v1/main-stock/materials"},
+		{Method: "GET", Path: "/api/v1/recipes"},
+		{Method: "POST", Path: "/api/v1/recipes"},
+		{Method: "PUT", Path: "/api/v1/recipes"},
+		{Method: "DELETE", Path: "/api/v1/recipes"},
 		{Method: "GET", Path: "/api/v1/finished-products"},
 		{Method: "POST", Path: "/api/v1/finished-products"},
 		{Method: "PUT", Path: "/api/v1/finished-products"},
@@ -95,6 +161,7 @@ func seed() {
 		{Method: "POST", Path: "/api/v1/roles"},
 		{Method: "PUT", Path: "/api/v1/roles"},
 		{Method: "DELETE", Path: "/api/v1/roles"},
+		{Method: "GET", Path: "/api/v1/permissions"},
 		{Method: "GET", Path: "/api/v1/audit"},
 	}
 	var createdPerms []models.Permission
