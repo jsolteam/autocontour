@@ -358,6 +358,33 @@ export function MaterialsPage() {
           remoteUrl: '/api/v1/units', remoteLabel: 'name', remoteValue: 'id', showWhen: hasCapacitySelected,
           hideInTable: true,
         },
+        {
+          key: 'has_capacity', label: 'Имеет вместимость', type: 'checkbox', required: false, hideInTable: true,
+          showWhen: categorySupportsCapacity, normalizePayload: normalizeCapacityPayload,
+        },
+        {
+          key: 'capacity_value', label: 'Вместимость — значение', type: 'number', required: true, min: 0.0001,
+          placeholder: 'Например: 1.0, 5.0, 12.0, 500.0', showWhen: hasCapacitySelected,
+          tableRender: (_val: any, row: any) => row.capacity_value
+            ? <Tag color="processing">{row.capacity_value} {row.capacity_unit?.name}</Tag>
+            : <span style={{ color: 'var(--color-text-muted)' }}>—</span>,
+        },
+        {
+          key: 'capacity_unit_id', label: 'Вместимость — ЕИ', type: 'select-remote', required: true,
+          remoteUrl: '/api/v1/units', remoteLabel: 'name', remoteValue: 'id', showWhen: hasCapacitySelected,
+          hideInTable: true,
+        },
+      ]}
+    />
+  )
+}
+
+export function NomenclaturePage() {
+  return (
+    <Tabs
+      items={[
+        { key: 'raw', label: 'Сырьё', children: <RawMaterialsPage /> },
+        { key: 'materials', label: 'Материалы', children: <MaterialsPage /> },
       ]}
     />
   )
