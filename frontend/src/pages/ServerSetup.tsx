@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { Button, Input, Form, Alert, Typography } from 'antd'
 import { GlobalOutlined, CheckCircleOutlined } from '@ant-design/icons'
 import { ping } from '../utils/api'

@@ -1,6 +1,6 @@
 import React from 'react'
 import { useEffect, useState } from 'react'
-import { Row, Col, Card, Typography, Tag, Button, Skeleton, Timeline } from 'antd'
+import { Row, Col, Typography, Tag, Button, Skeleton, Timeline } from 'antd'
 import {
   AppstoreOutlined, InboxOutlined, TeamOutlined, AuditOutlined,
   ShopOutlined, SlidersOutlined, RightOutlined, ClockCircleOutlined,
@@ -67,8 +67,9 @@ export default function Dashboard() {
     const fetchAll = async () => {
       setLoading(true)
       try {
-        const [nom, fp, units, conv, users, roles, logs] = await Promise.allSettled([
-          api.get('/api/v1/nomenclature'),
+        const [raw, materials, fp, units, conv, users, roles, logs] = await Promise.allSettled([
+          api.get('/api/v1/raw-materials'),
+          api.get('/api/v1/materials'),
           api.get('/api/v1/finished-products'),
           api.get('/api/v1/units'),
           api.get('/api/v1/conversions'),
@@ -77,7 +78,7 @@ export default function Dashboard() {
           api.get('/api/v1/audit'),
         ])
         setStats({
-          nomenclature: nom.status === 'fulfilled' ? nom.value.data.length : 0,
+          nomenclature: (raw.status === 'fulfilled' ? raw.value.data.length : 0) + (materials.status === 'fulfilled' ? materials.value.data.length : 0),
           finished_products: fp.status === 'fulfilled' ? fp.value.data.length : 0,
           units: units.status === 'fulfilled' ? units.value.data.length : 0,
           conversions: conv.status === 'fulfilled' ? conv.value.data.length : 0,
