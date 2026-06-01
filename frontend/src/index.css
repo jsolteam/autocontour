@@ -586,3 +586,32 @@ html, body, #root {
   justify-content: center;
   font-size: 18px;
 }
+
+/* Fix sidebar scrolling and make Ant Design inputs consistent in dense forms. */
+.ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ant-layout-sider .ant-menu {
+  min-height: 0;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+.ant-input,
+.ant-input-number,
+.ant-select-selector,
+.ant-picker {
+  border-radius: 8px !important;
+}
+.ant-form-item {
+  margin-bottom: 14px;
+}
+.recipe-line .ant-input-number,
+.invoice-line .ant-input-number,
+.recipe-line .ant-select,
+.invoice-line .ant-select {
+  min-width: 180px;
+  flex: 1 1 180px;
+}

@@ -62,6 +62,7 @@ func Migrate() {
 		&models.StockInvoiceItem{},
 		&models.ProductionPlan{},
 		&models.AuditLog{},
+		&models.AppSetting{},
 	)
 	if err != nil {
 		log.Fatalf("Ошибка миграции: %v", err)
@@ -185,6 +186,10 @@ func seed() {
 		{Method: "POST", Path: "/api/v1/production/plans/:id/complete"},
 		{Method: "POST", Path: "/api/v1/production/pack-pallets"},
 		{Method: "GET", Path: "/api/v1/audit"},
+		{Method: "GET", Path: "/api/v1/settings"},
+		{Method: "PUT", Path: "/api/v1/settings"},
+		{Method: "POST", Path: "/api/v1/invoices/:id/cancel"},
+		{Method: "POST", Path: "/api/v1/production/plans/:id/cancel"},
 	}
 	var createdPerms []models.Permission
 	for _, p := range permissions {

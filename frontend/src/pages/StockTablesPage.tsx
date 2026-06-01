@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Table, Tag, message, Button, Modal, Form, InputNumber, Alert, Select } from 'antd'
+import { Table, Tag, message, Button, Modal, Form, InputNumber, Alert, Select, DatePicker, Space } from 'antd'
 import { useNavigate, useParams } from 'react-router-dom'
 import PageHeader from '../components/PageHeader'
 import { api } from '../utils/api'
+import { labelStatus, statusColors } from '../utils/labels'
 
 const names: Record<string, string> = {
   'production-finished': 'Таблица ГП (Производство)', 'main-finished': 'Таблица ГП (Склад)', raw: 'Таблица сырья (Склад)', materials: 'Таблица материалов (Склад)', production: 'Склад производства',
@@ -16,6 +17,7 @@ export default function StockTablesPage() {
   const [loading, setLoading] = useState(false)
   const [edit, setEdit] = useState<any>(null)
   const [categoryFilter, setCategoryFilter] = useState<number | undefined>()
+  const [movementDates, setMovementDates] = useState<any>(null)
   const [form] = Form.useForm()
 
   const fetchData = useCallback(async () => {
@@ -40,7 +42,12 @@ export default function StockTablesPage() {
     return [...map.entries()].map(([value, label]) => ({ value, label }))
   }, [data, table])
 
-  const movementRows = (kind: 'raw' | 'material' | 'finished') => invoices.flatMap((inv) => (inv.items || []).filter((it: any) => kind === 'raw' ? it.raw_material : kind === 'material' ? it.production_material : it.finished_product).map((it: any) => ({ ...it, invoice: inv })))
+  const movementRows = (kind: 'raw' | 'material' | 'finished') => invoices.flatMap((inv) => (inv.items || []).filter((it: any) => kind === 'raw' ? it.raw_material : kind === 'material' ? it.production_material : it.finished_product).map((it: any) => ({ ...it, invoice: inv }))).filter((row) => {
+    const date = new Date(row.invoice.effective_at || row.invoice.created_at)
+    if (movementDates?.[0] && date < movementDates[0].startOf('day').toDate()) return false
+    if (movementDates?.[1] && date > movementDates[1].endOf('day').toDate()) return false
+    return true
+  })
   const openEdit = (record: any, type: 'raw' | 'materials') => { setEdit({ record, type }); form.setFieldsValue({ current_stock: record.current_stock }) }
   const saveEdit = async () => {
     const values = await form.validateFields()
@@ -69,7 +76,7 @@ export default function StockTablesPage() {
   return <div>
     <PageHeader title={names[table] || 'Основные таблицы'} subtitle="Просмотр остатков, движений и контрольных значений" crumbs={[{ label: 'Основные таблицы' }]} />
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>{Object.entries(names).map(([key, label]) => <Button key={key} type={key === table ? 'primary' : 'default'} onClick={() => navigate(`/stock-tables/${key}`)}>{label}</Button>)}</div>
-    {table !== 'production' && <Table size="small" rowKey={(r) => `${r.invoice.id}-${r.id}`} dataSource={movementRows(table === 'materials' ? 'material' : table === 'main-finished' || table === 'production-finished' ? 'finished' : 'raw')} pagination={{ pageSize: 5 }} title={() => 'Движения по накладным'} columns={[{ title: 'Дата', render: (_, r) => new Date(r.invoice.effective_at || r.invoice.created_at).toLocaleString('ru-RU') }, { title: 'Накладная', render: (_, r) => r.invoice.number }, { title: 'Позиция', render: (_, r) => r.raw_material?.name || r.production_material?.name || r.finished_product?.name }, { title: 'Количество', dataIndex: 'quantity' }, { title: 'Статус', render: (_, r) => <Tag>{r.invoice.status}</Tag> }]} />}
+    {table !== 'production' && <Table size="small" rowKey={(r) => `${r.invoice.id}-${r.id}`} dataSource={movementRows(table === 'materials' ? 'material' : table === 'main-finished' || table === 'production-finished' ? 'finished' : 'raw')} pagination={{ pageSize: 5 }} title={() => <Space wrap><span>Движения по накладным</span><DatePicker.RangePicker placeholder={['День от', 'День до']} format="DD.MM.YYYY" onChange={setMovementDates} /></Space>} columns={[{ title: 'Дата', render: (_, r) => new Date(r.invoice.effective_at || r.invoice.created_at).toLocaleString('ru-RU') }, { title: 'Накладная', render: (_, r) => r.invoice.number }, { title: 'Позиция', render: (_, r) => r.raw_material?.name || r.production_material?.name || r.finished_product?.name }, { title: 'Количество', dataIndex: 'quantity' }, { title: 'Статус', render: (_, r) => <Tag color={statusColors[r.invoice.status]}>{labelStatus(r.invoice.status)}</Tag> }]} />}
     {tableNode()}
     <Modal title="Ручное редактирование остатка" open={!!edit} onOk={saveEdit} onCancel={() => setEdit(null)} okText="Сохранить" cancelText="Отмена">
       <Alert type="warning" showIcon message="Внимание" description="Ручное изменение основных таблиц может негативно повлиять на отчеты и расчеты. Используйте его только для корректировок." style={{ marginBottom: 16 }} />

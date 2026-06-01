@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Layout, Menu, Button, Typography, Avatar, Dropdown, Grid, Modal, Form, Input, Switch } from 'antd'
+import { Layout, Menu, Button, Typography, Avatar, Dropdown, Grid } from 'antd'
 import {
   DashboardOutlined, AppstoreOutlined, InboxOutlined, UserOutlined,
   LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, AuditOutlined,
@@ -20,9 +20,7 @@ export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout, isAdmin } = useAuthStore()
-  const { companyName, setCompanyName, themeMode, setThemeMode } = useSettingsStore()
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [settingsForm] = Form.useForm()
+  const { companyName, themeMode, setThemeMode } = useSettingsStore()
 
   useEffect(() => {
     if (isMobile) setCollapsed(true)
@@ -61,7 +59,12 @@ export default function AppLayout() {
     {
       key: '/warehouse',
       icon: <InboxOutlined />,
-      label: 'Накладные и склад',
+      label: 'Складские операции',
+    },
+    {
+      key: '/invoices',
+      icon: <FileTextOutlined />,
+      label: 'Накладные',
     },
     {
       key: 'stockTables',
@@ -78,7 +81,7 @@ export default function AppLayout() {
     {
       key: '/production',
       icon: <CheckSquareOutlined />,
-      label: 'Производство',
+      label: 'Бизнес-процессы',
     },
     {
       key: '/reports',
@@ -93,6 +96,7 @@ export default function AppLayout() {
         { key: '/users', icon: <TeamOutlined />, label: 'Пользователи' },
         { key: '/roles', icon: <SafetyCertificateOutlined />, label: 'Роли и права' },
         { key: '/audit', icon: <AuditOutlined />, label: 'Журнал действий' },
+        { key: '/system-settings', icon: <SettingOutlined />, label: 'Настройки системы' },
       ],
     }] : []),
   ]
@@ -114,10 +118,10 @@ export default function AppLayout() {
     },
     { type: 'divider' as const },
     {
-      key: 'settings',
+      key: 'theme',
       icon: <SettingOutlined />,
-      label: 'Настройки',
-      onClick: () => { settingsForm.setFieldsValue({ company_name: companyName, dark_theme: themeMode === 'dark' }); setSettingsOpen(true) },
+      label: themeMode === 'dark' ? 'Светлая тема' : 'Темная тема',
+      onClick: () => setThemeMode(themeMode === 'dark' ? 'light' : 'dark'),
     },
     { type: 'divider' as const },
     {
@@ -140,19 +144,21 @@ export default function AppLayout() {
     '/finished-products': 'Готовая продукция',
     '/units': 'Единицы измерения',
     '/conversions': 'Коэффициенты перевода',
-    '/warehouse': 'Накладные и склад',
+    '/warehouse': 'Складские операции',
+    '/invoices': 'Накладные',
     '/stock-tables': 'Основные таблицы',
     '/stock-tables/production-finished': 'ГП производство',
     '/stock-tables/main-finished': 'ГП склад',
     '/stock-tables/raw': 'Сырьё склад',
     '/stock-tables/materials': 'Материалы склад',
     '/stock-tables/production': 'Склад производства',
-    '/production': 'Производство',
+    '/production': 'Бизнес-процессы',
     '/reports': 'Отчеты',
     '/recipes': 'Рецепты',
     '/users': 'Пользователи',
     '/roles': 'Роли и права',
     '/audit': 'Журнал действий',
+    '/system-settings': 'Настройки системы',
   }
 
   return (
@@ -295,28 +301,6 @@ export default function AppLayout() {
           </div>
         </Content>
       </Layout>
-          <Modal
-        title="Системные настройки"
-        open={settingsOpen}
-        onCancel={() => setSettingsOpen(false)}
-        onOk={async () => {
-          const values = await settingsForm.validateFields()
-          setCompanyName(values.company_name)
-          setThemeMode(values.dark_theme ? 'dark' : 'light')
-          setSettingsOpen(false)
-        }}
-        okText="Сохранить"
-        cancelText="Отмена"
-      >
-        <Form form={settingsForm} layout="vertical" initialValues={{ company_name: companyName, dark_theme: themeMode === 'dark' }}>
-          <Form.Item name="company_name" label="Название компании" rules={[{ required: true, message: 'Введите название компании' }]}>
-            <Input size="large" />
-          </Form.Item>
-          <Form.Item name="dark_theme" label="Темная тема" valuePropName="checked">
-            <Switch checkedChildren="Вкл" unCheckedChildren="Выкл" />
-          </Form.Item>
-        </Form>
-      </Modal>
     </Layout>
   )
 }

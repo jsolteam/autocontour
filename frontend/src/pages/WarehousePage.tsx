@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Row, Col, Typography, Tag, Button, Table, InputNumber, Input, Modal, Form, Select, message, DatePicker, Popconfirm } from 'antd'
 import { InboxOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { labelInvoiceType, labelStatus, statusColors } from '../utils/labels'
 import PageHeader from '../components/PageHeader'
 import { api } from '../utils/api'
 import dayjs from 'dayjs'
@@ -51,7 +52,8 @@ export default function WarehousePage() {
   const openInvoice = (type: InvoiceKind) => {
     setInvoiceType(type)
     form.resetFields()
-    form.setFieldsValue({ type, effective_at: dayjs(), items: [{ item_type: type === 'material_issue' ? 'material' : type === 'raw_issue' ? 'raw' : type === 'finished_shipment' ? 'finished' : 'raw' }] })
+    const operationNumber = (type === 'raw_issue' || type === 'material_issue') ? `ОП-${dayjs().format('YYYYMMDD-HHmmss')}` : undefined
+    form.setFieldsValue({ number: operationNumber, type, effective_at: dayjs(), items: [{ item_type: type === 'material_issue' ? 'material' : type === 'raw_issue' ? 'raw' : type === 'finished_shipment' ? 'finished' : 'raw' }] })
     setModalOpen(true)
   }
 
@@ -64,7 +66,7 @@ export default function WarehousePage() {
         effective_at: values.effective_at?.toISOString(),
         items: values.items,
       })
-      message.success('Операция создана и ожидает подтверждения на дашборде')
+      message.success('Операция создана и ожидает подтверждения')
       setModalOpen(false)
       fetchData()
     } catch (e: any) {
@@ -89,8 +91,8 @@ export default function WarehousePage() {
   return (
     <div>
       <PageHeader
-        title="Накладные и склад"
-        subtitle="Оформление приходов, расходов и отгрузок с последующим подтверждением"
+        title="Складские операции"
+        subtitle="Оформление приходов, расходов и отгрузок. Для расходов используется номер операции без накладной."
         crumbs={[{ label: 'Склад' }]}
         badge={<Tag color="processing">Двухэтапное подтверждение</Tag>}
       />
@@ -129,18 +131,18 @@ export default function WarehousePage() {
         <div className="warehouse-panel__header"><div><div className="warehouse-panel__title">Журнал операций</div><Text type="secondary">Созданные накладные и их статус подтверждения.</Text></div></div>
         <Table rowKey="id" dataSource={invoices} loading={loading} scroll={{ x: true }} columns={[
           { title: 'Номер', dataIndex: 'number' },
-          { title: 'Тип', dataIndex: 'type' },
+          { title: 'Тип', render: (_, row) => labelInvoiceType(row.type) },
           { title: 'Дата операции', render: (_, row) => row.effective_at ? new Date(row.effective_at).toLocaleString('ru-RU') : '—' },
-          { title: 'Статус', render: (_, row) => <Tag color={row.status === 'CONFIRMED' ? 'success' : 'warning'}>{row.status === 'CONFIRMED' ? 'Подтверждена' : 'Ожидает'}</Tag> },
+          { title: 'Статус', render: (_, row) => <Tag color={statusColors[row.status]}>{labelStatus(row.status)}</Tag> },
           { title: 'Позиций', render: (_, row) => row.items?.length || 0 },
-          { title: '', render: (_, row) => row.status !== 'CONFIRMED' && <Popconfirm title="Подтвердить операцию?" description="Это изменит остатки на складах" onConfirm={() => confirmInvoice(row.id)} okText="Да" cancelText="Нет"><Button>Подтвердить</Button></Popconfirm> },
+          { title: '', render: (_, row) => row.status === 'PENDING' && <Popconfirm title="Подтвердить операцию?" description="Это изменит остатки на складах" onConfirm={() => confirmInvoice(row.id)} okText="Да" cancelText="Нет"><Button>Подтвердить</Button></Popconfirm> },
         ]} />
       </div>
 
       <Modal title="Складская операция" open={modalOpen} onOk={saveInvoice} onCancel={() => setModalOpen(false)} okText="Создать на подтверждение" cancelText="Отмена" width={860}>
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
           <Row gutter={12}>
-            <Col xs={24} md={8}><Form.Item name="number" label="Номер накладной" rules={[{ required: true }]}><Input size="large" /></Form.Item></Col>
+            <Col xs={24} md={8}><Form.Item name="number" label={invoiceType === 'raw_issue' || invoiceType === 'material_issue' ? 'Номер операции' : 'Номер накладной'} rules={[{ required: true }]}><Input size="large" disabled={invoiceType === 'raw_issue' || invoiceType === 'material_issue'} /></Form.Item></Col>
             <Col xs={24} md={8}><Form.Item name="type" label="Тип операции" rules={[{ required: true }]}><Select size="large" onChange={(v) => setInvoiceType(v)} options={[
               { label: 'Приход сырья и материалов', value: 'mixed_receipt' },
               { label: 'Расход сырья', value: 'raw_issue' },

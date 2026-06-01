@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Button, Form, Input, InputNumber, message, Modal, Popconfirm,
   Select, Space, Table, Tag, Typography, Row, Col,
@@ -43,7 +43,6 @@ export default function RecipesPage() {
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editRecord, setEditRecord] = useState<Recipe | null>(null)
-  const proportionConfirmOpen = useRef(false)
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -94,32 +93,19 @@ export default function RecipesPage() {
   }
 
   const updateRawLine = (index: number, patch: Partial<RecipeRawLine>) => {
-    if (patch.quantity !== undefined) {
-      const current = rawLines[index]
-      const oldQuantity = Number(current?.quantity || 0)
-      const nextQuantity = Number(patch.quantity || 0)
-      if (oldQuantity > 0 && nextQuantity > 0 && rawLines.length > 1 && !proportionConfirmOpen.current) {
-        proportionConfirmOpen.current = true
-        Modal.confirm({
-          title: 'Нужно ли изменить пропорции?',
-          content: 'Количество одной позиции изменилось. Пересчитать остальные компоненты по текущей пропорции?',
-          okText: 'Да, пересчитать',
-          cancelText: 'Нет',
-          onOk: () => {
-            const factor = nextQuantity / oldQuantity
-            setRawLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : { ...line, quantity: Number((line.quantity * factor).toFixed(4)) })))
-            proportionConfirmOpen.current = false
-          },
-          onCancel: () => {
-            setRawLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)))
-            proportionConfirmOpen.current = false
-          },
-        })
-        return
-      }
-    }
     setRawLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)))
   }
+
+  const calculateRecipe = () => {
+    const total = rawLines.reduce((sum, line) => sum + Number(line.quantity || 0), 0)
+    if (total <= 0) {
+      message.error('Для расчета заполните количество сырья')
+      return
+    }
+    setRawLines((prev) => prev.map((line) => ({ ...line, quantity: Number(line.quantity.toFixed(4)) })))
+    message.success('Расчет выполнен: доли сырья пересчитаны от общей массы')
+  }
+
 
   const updateMaterialLine = (index: number, patch: Partial<RecipeMaterialLine>) => {
     setMaterialLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)))
@@ -170,12 +156,14 @@ export default function RecipesPage() {
     }
   }
 
-  const totalLiquidLiters = rawLines.reduce((sum, line) => {
+  const totalRawKg = rawLines.reduce((sum, line) => {
     const raw = rawByID.get(line.raw_material_id)
-    return (units.find((u) => u.id === (line.unit_id || raw?.base_unit?.id))?.name === 'л' || raw?.base_unit?.name === 'л') ? sum + Number(line.quantity || 0) : sum
+    const unit = units.find((u) => u.id === (line.unit_id || raw?.base_unit?.id))?.name || raw?.base_unit?.name
+    return unit === 'кг' ? sum + Number(line.quantity || 0) : sum
   }, 0)
+  const totalRaw = rawLines.reduce((sum, line) => sum + Number(line.quantity || 0), 0)
   const outputQuantity = Number(Form.useWatch('output_quantity', form) || 0)
-  const volumePerUnit = outputQuantity > 0 ? totalLiquidLiters / outputQuantity : 0
+  const kgPerUnit = outputQuantity > 0 ? totalRawKg / outputQuantity : 0
 
   const columns = [
     { title: 'Название', dataIndex: 'name' },
@@ -296,8 +284,9 @@ export default function RecipesPage() {
         </Form>
 
         <div className="recipe-summary">
-          <Tag color="cyan">Жидкое сырьё: {totalLiquidLiters || 0} л</Tag>
-          <Tag color="processing">На 1 шт: {volumePerUnit ? volumePerUnit.toFixed(4) : '—'} л</Tag>
+          <Tag color="cyan">Сырьё в кг: {totalRawKg || 0} кг</Tag>
+          <Tag color="processing">На 1 шт: {kgPerUnit ? kgPerUnit.toFixed(4) : '—'} кг</Tag>
+          <Button onClick={calculateRecipe}>Сделать расчет</Button>
         </div>
 
         <Row gutter={[16, 16]}>
@@ -328,7 +317,7 @@ export default function RecipesPage() {
                         step={0.1}
                         value={line.quantity}
                         onChange={(value) => updateRawLine(index, { quantity: Number(value || 0) })}
-                        addonAfter={units.find((u) => u.id === (line.unit_id || selected?.base_unit?.id))?.name ?? 'ЕИ'}
+                        addonAfter={`${units.find((u) => u.id === (line.unit_id || selected?.base_unit?.id))?.name ?? 'кг'} · ${totalRaw ? ((Number(line.quantity || 0) / totalRaw) * 100).toFixed(2) : '0'}%`}
                       />
                       <Select
                         showSearch

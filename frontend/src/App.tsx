@@ -16,10 +16,12 @@ import UsersPage from './pages/UsersPage'
 import RolesPage from './pages/RolesPage'
 import AuditPage from './pages/AuditPage'
 import WarehousePage from './pages/WarehousePage'
+import InvoicesPage from './pages/InvoicesPage'
 import StockTablesPage from './pages/StockTablesPage'
 import ReportsPage from './pages/ReportsPage'
 import ProductionPage from './pages/ProductionPage'
 import RecipesPage from './pages/RecipesPage'
+import SystemSettingsPage from './pages/SystemSettingsPage'
 import NotFound from './pages/NotFound'
 import './index.css'
 
@@ -35,10 +37,15 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   const [serverConfigured, setServerConfigured] = useState<boolean>(!!localStorage.getItem('server_url'))
   const themeMode = useSettingsStore((s) => s.themeMode)
+  const loadSystemSettings = useSettingsStore((s) => s.loadSystemSettings)
 
   useEffect(() => {
     document.documentElement.dataset.theme = themeMode
   }, [themeMode])
+
+  useEffect(() => {
+    if (serverConfigured) loadSystemSettings()
+  }, [loadSystemSettings, serverConfigured])
 
   if (!serverConfigured) {
     return (
@@ -86,6 +93,7 @@ export default function App() {
             <Route path="units" element={<UnitsPage />} />
             <Route path="conversions" element={<ConversionsPage />} />
             <Route path="warehouse" element={<WarehousePage />} />
+            <Route path="invoices" element={<InvoicesPage />} />
             <Route path="stock-tables" element={<StockTablesPage />} />
             <Route path="stock-tables/:table" element={<StockTablesPage />} />
             <Route path="reports" element={<ReportsPage />} />
@@ -94,6 +102,7 @@ export default function App() {
             <Route path="users" element={<UsersPage />} />
             <Route path="roles" element={<RolesPage />} />
             <Route path="audit" element={<AuditPage />} />
+            <Route path="system-settings" element={<SystemSettingsPage />} />
             <Route path="*" element={<NotFound />} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />

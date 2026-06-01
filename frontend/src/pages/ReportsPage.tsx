@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Tabs, Table, Tag, message, DatePicker, Select, Space } from 'antd'
 import PageHeader from '../components/PageHeader'
 import { api } from '../utils/api'
+import { labelInvoiceType, labelStatus } from '../utils/labels'
 
 export default function ReportsPage() {
   const [balances, setBalances] = useState<any[]>([])
@@ -33,6 +34,7 @@ export default function ReportsPage() {
     { title: 'Склад', render: (_, r) => `${r.main_stock} ${r.unit}` },
     { title: 'Производство', render: (_, r) => `${r.production_stock} ${r.unit}` },
     { title: 'Общий остаток', render: (_, r) => <strong>{r.total} {r.unit}</strong> },
+    ...(type === 'finished' ? [{ title: 'Общий остаток, паллеты', render: (_: any, r: any) => <strong>{r.total_pallets} паллет</strong> }] : []),
   ]} />
 
   return <div>
@@ -44,11 +46,11 @@ export default function ReportsPage() {
         <Table rowKey={(r) => `${r.invoice.id}-${r.id}`} loading={loading} dataSource={receiptRows} scroll={{ x: true }} columns={[
           { title: 'Дата и время', render: (_, r) => new Date(r.invoice.effective_at || r.invoice.created_at).toLocaleString('ru-RU') },
           { title: 'Номер накладной', render: (_, r) => r.invoice.number },
-          { title: 'Тип', render: (_, r) => <Tag>{r.invoice.type}</Tag> },
+          { title: 'Тип', render: (_, r) => <Tag>{labelInvoiceType(r.invoice.type)}</Tag> },
           { title: 'Позиция', render: (_, r) => r.raw_material?.name || r.production_material?.name || r.finished_product?.name },
           { title: 'Категория', render: (_, r) => r.raw_material?.category?.name || r.production_material?.category?.name || 'ГП' },
           { title: 'Количество', dataIndex: 'quantity' },
-          { title: 'Статус', render: (_, r) => <Tag color={r.invoice.status === 'CONFIRMED' ? 'success' : 'warning'}>{r.invoice.status}</Tag> },
+          { title: 'Статус', render: (_, r) => <Tag color={r.invoice.status === 'CONFIRMED' ? 'success' : 'warning'}>{labelStatus(r.invoice.status)}</Tag> },
         ]} />
       </> },
     ]} />

@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { api } from '../utils/api'
+import { labelInvoiceType, labelStatus, statusColors } from '../utils/labels'
 import StatCard from '../components/StatCard'
 import dayjs from 'dayjs'
 import 'dayjs/locale/ru'
@@ -26,8 +27,8 @@ interface Stats {
 interface AuditEntry { id: number; action: string; details: string; created_at: string; user: { login: string; full_name: string } }
 
 const quickLinks: { icon: React.ReactNode; title: string; subtitle: string; path: string; color: string; stat: keyof Stats | null }[] = [
-  { icon: <InboxOutlined />, title: 'Накладные и склад', subtitle: 'Приходы, расходы и отгрузки', path: '/warehouse', color: '#fa8c16', stat: 'pending_invoices' },
-  { icon: <CheckSquareOutlined />, title: 'Производство', subtitle: 'Запуск и завершение планов', path: '/production', color: '#eb2f96', stat: 'active_plans' },
+  { icon: <InboxOutlined />, title: 'Складские операции', subtitle: 'Приходы, расходы и отгрузки', path: '/warehouse', color: '#fa8c16', stat: 'pending_invoices' },
+  { icon: <CheckSquareOutlined />, title: 'Бизнес-процессы', subtitle: 'Запуск и завершение планов', path: '/production', color: '#eb2f96', stat: 'active_plans' },
   { icon: <TableOutlined />, title: 'Основные таблицы', subtitle: 'Остатки и движения', path: '/stock-tables/raw', color: '#1677ff', stat: null },
   { icon: <FileTextOutlined />, title: 'Отчеты', subtitle: 'Приходы и остатки', path: '/reports', color: '#13c2c2', stat: null },
   { icon: <ExperimentOutlined />, title: 'Рецепты', subtitle: 'Технологические карты', path: '/recipes', color: '#722ed1', stat: 'recipes' },
@@ -45,7 +46,7 @@ export default function Dashboard() {
   const companyName = useSettingsStore((s) => s.companyName)
   const [stats, setStats] = useState<Stats | null>(null)
   const [recentLogs, setRecentLogs] = useState<AuditEntry[]>([])
-  const [pendingInvoices, setPendingInvoices] = useState<any[]>([])
+  const [pendingItems, setPendingItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [now, setNow] = useState(new Date())
 
@@ -58,14 +59,16 @@ export default function Dashboard() {
         api.get('/api/v1/raw-materials'), api.get('/api/v1/materials'), api.get('/api/v1/finished-products'), api.get('/api/v1/recipes'),
         api.get('/api/v1/users'), api.get('/api/v1/audit'), api.get('/api/v1/invoices', { params: { status: 'PENDING' } }), api.get('/api/v1/production/plans', { params: { status: 'IN_PROGRESS' } }),
       ])
-      const pending = invoices.status === 'fulfilled' ? invoices.value.data : []
-      setPendingInvoices(pending)
+      const pendingInvoices = invoices.status === 'fulfilled' ? invoices.value.data.map((item: any) => ({ ...item, pending_kind: 'invoice' })) : []
+      const pendingPlans = plans.status === 'fulfilled' ? plans.value.data.map((item: any) => ({ ...item, pending_kind: 'plan' })) : []
+      const pending = [...pendingInvoices, ...pendingPlans]
+      setPendingItems(pending)
       setStats({
         nomenclature: (raw.status === 'fulfilled' ? raw.value.data.length : 0) + (materials.status === 'fulfilled' ? materials.value.data.length : 0),
         finished_products: fp.status === 'fulfilled' ? fp.value.data.length : 0,
         recipes: recipes.status === 'fulfilled' ? recipes.value.data.length : 0,
         pending_invoices: pending.length,
-        active_plans: plans.status === 'fulfilled' ? plans.value.data.length : 0,
+        active_plans: pendingPlans.length,
         users: users.status === 'fulfilled' ? users.value.data.length : 0,
       })
       if (logs.status === 'fulfilled') setRecentLogs(logs.value.data.slice(0, 8))
@@ -77,6 +80,17 @@ export default function Dashboard() {
   const confirmInvoice = async (id: number) => {
     try { await api.post(`/api/v1/invoices/${id}/confirm`); message.success('Операция подтверждена'); fetchAll() }
     catch (e: any) { message.error(e?.response?.data?.error || 'Ошибка подтверждения') }
+  }
+  const completePlan = async (id: number) => {
+    try { await api.post(`/api/v1/production/plans/${id}/complete`); message.success('План завершен'); fetchAll() }
+    catch (e: any) { message.error(e?.response?.data?.error || 'Ошибка завершения плана') }
+  }
+  const cancelPending = async (row: any) => {
+    try {
+      await api.post(row.pending_kind === 'invoice' ? `/api/v1/invoices/${row.id}/cancel` : `/api/v1/production/plans/${row.id}/cancel`)
+      message.success('Ожидание отменено')
+      fetchAll()
+    } catch (e: any) { message.error(e?.response?.data?.error || 'Ошибка отмены') }
   }
 
   const timeStr = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -122,11 +136,11 @@ export default function Dashboard() {
 
         <Col xs={24} xl={8}>
           <div style={{ fontSize: 11, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Ожидают подтверждения</div>
-          <Table rowKey="id" size="small" loading={loading} dataSource={pendingInvoices} pagination={{ pageSize: 5 }} scroll={{ x: true }} columns={[
-            { title: 'Номер', dataIndex: 'number' },
-            { title: 'Тип', dataIndex: 'type' },
-            { title: 'Поз.', render: (_, r) => r.items?.length || 0 },
-            { title: '', render: (_, r) => <Popconfirm title="Подтвердить операцию?" description="Остатки будут изменены" onConfirm={() => confirmInvoice(r.id)} okText="Да" cancelText="Нет"><Button size="small">OK</Button></Popconfirm> },
+          <Table rowKey="id" size="small" loading={loading} dataSource={pendingItems} pagination={{ pageSize: 5 }} scroll={{ x: true }} columns={[
+            { title: 'Документ / план', render: (_, r) => r.pending_kind === 'invoice' ? (r.number || 'Операция') : `План: ${r.recipe?.name || r.finished_product?.name || 'производство'}` },
+            { title: 'Тип', render: (_, r) => r.pending_kind === 'invoice' ? labelInvoiceType(r.type) : 'Производственный план' },
+            { title: 'Статус', render: (_, r) => <Tag color={statusColors[r.status]}>{labelStatus(r.status)}</Tag> },
+            { title: '', render: (_, r) => <div style={{ display: 'flex', gap: 4 }}><Popconfirm title={r.pending_kind === 'invoice' ? 'Подтвердить операцию?' : 'Завершить план?'} description={r.pending_kind === 'invoice' ? 'Остатки будут изменены' : 'Сырьё и материалы будут списаны'} onConfirm={() => r.pending_kind === 'invoice' ? confirmInvoice(r.id) : completePlan(r.id)} okText="Да" cancelText="Нет"><Button size="small">OK</Button></Popconfirm><Popconfirm title="Отменить?" onConfirm={() => cancelPending(r)} okText="Да" cancelText="Нет"><Button size="small" danger>Отмена</Button></Popconfirm></div> },
           ]} />
         </Col>
 
