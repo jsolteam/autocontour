@@ -54,13 +54,13 @@ export default function Login() {
             padding: '12px 24px',
             marginBottom: 20,
           }}>
-            <span style={{ fontSize: 28, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>
+            <span style={{ fontSize: 28, fontWeight: 800, color: 'var(--color-text-primary)', letterSpacing: '-0.02em' }}>
               АВТО<span style={{ color: 'var(--color-accent)' }}>КОНТУР</span>
             </span>
           </div>
           <div>
             <Text style={{ color: 'var(--color-text-muted)', fontSize: 12, letterSpacing: '0.12em' }}>
-              УПРАВЛЕНИЕ ПРОИЗВОДСТВОМ · JSOL TEAM
+              УПРАВЛЕНИЕ ПРОИЗВОДСТВОМ
             </Text>
           </div>
         </div>
@@ -128,6 +128,7 @@ export default function Login() {
           fontSize: 12,
         }}>
           Нет доступа? Обратитесь к администратору системы
+          · Разработчик: JSOL Team
         </Text>
       </div>
     </div>

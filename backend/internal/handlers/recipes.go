@@ -16,6 +16,7 @@ import (
 type recipeRawInput struct {
 	RawMaterialID uint    `json:"raw_material_id" binding:"required"`
 	Quantity      float64 `json:"quantity" binding:"required"`
+	UnitID        *uint   `json:"unit_id"`
 }
 
 type recipeMaterialInput struct {
@@ -27,6 +28,7 @@ type recipeInput struct {
 	FinishedProductID uint                  `json:"finished_product_id" binding:"required"`
 	Name              string                `json:"name" binding:"required"`
 	OutputQuantity    float64               `json:"output_quantity" binding:"required"`
+	OutputUnitID      *uint                 `json:"output_unit_id"`
 	RawItems          []recipeRawInput      `json:"raw_items" binding:"required"`
 	MaterialItems     []recipeMaterialInput `json:"material_items" binding:"required"`
 }
@@ -68,6 +70,7 @@ func CreateRecipe(c *gin.Context) {
 			FinishedProductID: input.FinishedProductID,
 			Name:              strings.TrimSpace(input.Name),
 			OutputQuantity:    input.OutputQuantity,
+			OutputUnitID:      input.OutputUnitID,
 		}
 		if err := tx.Create(&recipe).Error; err != nil {
 			return err
@@ -107,6 +110,7 @@ func UpdateRecipe(c *gin.Context) {
 		recipe.FinishedProductID = input.FinishedProductID
 		recipe.Name = strings.TrimSpace(input.Name)
 		recipe.OutputQuantity = input.OutputQuantity
+		recipe.OutputUnitID = input.OutputUnitID
 		if err := tx.Save(&recipe).Error; err != nil {
 			return err
 		}
@@ -151,8 +155,10 @@ func DeleteRecipe(c *gin.Context) {
 func recipePreloads(db *gorm.DB) *gorm.DB {
 	return db.
 		Preload("FinishedProduct.BaseUnit").
+		Preload("OutputUnit").
 		Preload("RawItems.RawMaterial.Category").
 		Preload("RawItems.RawMaterial.BaseUnit").
+		Preload("RawItems.Unit").
 		Preload("MaterialItems.ProductionMaterial.Category").
 		Preload("MaterialItems.ProductionMaterial.BaseUnit").
 		Preload("MaterialItems.ProductionMaterial.CapacityUnit")
@@ -187,7 +193,19 @@ func validateRecipeInput(input recipeInput) error {
 		if err := database.DB.Preload("BaseUnit").First(&material, raw.RawMaterialID).Error; err != nil {
 			return fmt.Errorf("сырьё ID=%d не найдено", raw.RawMaterialID)
 		}
-		if isLiterUnit(material.BaseUnit.Name) {
+		lineUnitID := material.BaseUnitID
+		if raw.UnitID != nil {
+			lineUnitID = *raw.UnitID
+		}
+		if lineUnitID != material.BaseUnitID {
+			if _, err := findRawConversion(material.ID, lineUnitID, material.BaseUnitID); err != nil {
+				return fmt.Errorf("для сырья %s нет коэффициента перевода из выбранной ЕИ в базовую ЕИ", material.Name)
+			}
+		}
+		liters, err := convertRawQuantity(raw.Quantity, material.ID, lineUnitID, "л")
+		if err == nil {
+			literRawTotal += liters
+		} else if isLiterUnit(material.BaseUnit.Name) {
 			literRawTotal += raw.Quantity
 		}
 	}
@@ -224,6 +242,7 @@ func replaceRecipeLines(tx *gorm.DB, recipeID uint, input recipeInput) error {
 			RecipeID:      recipeID,
 			RawMaterialID: raw.RawMaterialID,
 			Quantity:      raw.Quantity,
+			UnitID:        raw.UnitID,
 		})
 	}
 	if err := tx.Create(&rawItems).Error; err != nil {
@@ -239,6 +258,28 @@ func replaceRecipeLines(tx *gorm.DB, recipeID uint, input recipeInput) error {
 		})
 	}
 	return tx.Create(&materialItems).Error
+}
+
+func findRawConversion(rawID uint, fromUnitID uint, toUnitID uint) (models.UnitConversion, error) {
+	var conversion models.UnitConversion
+	err := database.DB.Where("nomenclature_type = ? AND from_unit_id = ? AND to_unit_id = ? AND (item_id = ? OR item_id IS NULL)", models.NomenclatureTypeRaw, fromUnitID, toUnitID, rawID).
+		Order("item_id IS NULL").First(&conversion).Error
+	return conversion, err
+}
+
+func convertRawQuantity(quantity float64, rawID uint, fromUnitID uint, toUnitName string) (float64, error) {
+	var toUnit models.UnitOfMeasure
+	if err := database.DB.Where("LOWER(name) IN ?", []string{strings.ToLower(toUnitName), "литр", "литры", "l"}).First(&toUnit).Error; err != nil {
+		return 0, err
+	}
+	if fromUnitID == toUnit.ID {
+		return quantity, nil
+	}
+	conversion, err := findRawConversion(rawID, fromUnitID, toUnit.ID)
+	if err != nil {
+		return 0, err
+	}
+	return quantity * conversion.Coefficient, nil
 }
 
 func isLiterUnit(name string) bool {

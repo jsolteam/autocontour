@@ -68,7 +68,7 @@ export default function ServerSetup({ onConfigured }: Props) {
             АВТО-КОНТУР
           </Title>
           <Text style={{ color: 'var(--color-text-muted)', fontSize: 12, letterSpacing: '0.1em' }}>
-            JSOL TEAM · ERP СИСТЕМА
+            ERP СИСТЕМА
           </Text>
         </div>
 

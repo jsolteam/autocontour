@@ -24,7 +24,7 @@ export default function NotFound() {
         Страница не найдена
       </div>
       <Text style={{ color: 'var(--color-text-muted)', maxWidth: 300 }}>
-        Запрошенный раздел не существует или будет добавлен в следующих спринтах
+        Запрошенный раздел не существует или недоступен для текущего пользователя
       </Text>
       <Button
         type="primary"

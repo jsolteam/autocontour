@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Button, Form, Input, InputNumber, message, Modal, Popconfirm,
   Select, Space, Table, Tag, Typography, Row, Col,
@@ -14,7 +14,7 @@ interface Unit { id: number; name: string }
 interface FinishedProduct { id: number; name: string }
 interface RawMaterial { id: number; name: string; base_unit?: Unit }
 interface ProductionMaterial { id: number; name: string; base_unit?: Unit; capacity_value?: number | null; capacity_unit?: Unit | null }
-interface RecipeRawLine { raw_material_id: number; quantity: number; raw_material?: RawMaterial }
+interface RecipeRawLine { raw_material_id: number; quantity: number; unit_id?: number; raw_material?: RawMaterial; unit?: Unit }
 interface RecipeMaterialLine { production_material_id: number; quantity: number; production_material?: ProductionMaterial }
 interface Recipe {
   id: number
@@ -22,6 +22,8 @@ interface Recipe {
   finished_product_id: number
   finished_product?: FinishedProduct
   output_quantity: number
+  output_unit_id?: number
+  output_unit?: Unit
   raw_items: RecipeRawLine[]
   material_items: RecipeMaterialLine[]
 }
@@ -35,25 +37,29 @@ export default function RecipesPage() {
   const [finishedProducts, setFinishedProducts] = useState<FinishedProduct[]>([])
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([])
   const [materials, setMaterials] = useState<ProductionMaterial[]>([])
+  const [units, setUnits] = useState<Unit[]>([])
   const [rawLines, setRawLines] = useState<RecipeRawLine[]>([emptyRawLine()])
   const [materialLines, setMaterialLines] = useState<RecipeMaterialLine[]>([emptyMaterialLine()])
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editRecord, setEditRecord] = useState<Recipe | null>(null)
+  const proportionConfirmOpen = useRef(false)
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
     try {
-      const [recipesRes, productsRes, rawRes, materialsRes] = await Promise.all([
+      const [recipesRes, productsRes, rawRes, materialsRes, unitsRes] = await Promise.all([
         api.get('/api/v1/recipes'),
         api.get('/api/v1/finished-products'),
         api.get('/api/v1/raw-materials'),
         api.get('/api/v1/materials'),
+        api.get('/api/v1/units'),
       ])
       setRecipes(recipesRes.data)
       setFinishedProducts(productsRes.data)
       setRawMaterials(rawRes.data)
       setMaterials(materialsRes.data)
+      setUnits(unitsRes.data)
     } catch (e: any) {
       message.error(e?.response?.data?.error || 'Ошибка загрузки рецептов')
     } finally {
@@ -80,13 +86,38 @@ export default function RecipesPage() {
       name: record.name,
       finished_product_id: record.finished_product_id,
       output_quantity: record.output_quantity,
+      output_unit_id: record.output_unit_id,
     })
-    setRawLines(record.raw_items?.map((line) => ({ raw_material_id: line.raw_material_id, quantity: line.quantity })) || [emptyRawLine()])
+    setRawLines(record.raw_items?.map((line) => ({ raw_material_id: line.raw_material_id, quantity: line.quantity, unit_id: line.unit_id })) || [emptyRawLine()])
     setMaterialLines(record.material_items?.map((line) => ({ production_material_id: line.production_material_id, quantity: line.quantity })) || [emptyMaterialLine()])
     setModalOpen(true)
   }
 
   const updateRawLine = (index: number, patch: Partial<RecipeRawLine>) => {
+    if (patch.quantity !== undefined) {
+      const current = rawLines[index]
+      const oldQuantity = Number(current?.quantity || 0)
+      const nextQuantity = Number(patch.quantity || 0)
+      if (oldQuantity > 0 && nextQuantity > 0 && rawLines.length > 1 && !proportionConfirmOpen.current) {
+        proportionConfirmOpen.current = true
+        Modal.confirm({
+          title: 'Нужно ли изменить пропорции?',
+          content: 'Количество одной позиции изменилось. Пересчитать остальные компоненты по текущей пропорции?',
+          okText: 'Да, пересчитать',
+          cancelText: 'Нет',
+          onOk: () => {
+            const factor = nextQuantity / oldQuantity
+            setRawLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : { ...line, quantity: Number((line.quantity * factor).toFixed(4)) })))
+            proportionConfirmOpen.current = false
+          },
+          onCancel: () => {
+            setRawLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)))
+            proportionConfirmOpen.current = false
+          },
+        })
+        return
+      }
+    }
     setRawLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)))
   }
 
@@ -112,7 +143,7 @@ export default function RecipesPage() {
       if (!validateLines()) return
       const payload = {
         ...values,
-        raw_items: rawLines.map(({ raw_material_id, quantity }) => ({ raw_material_id, quantity })),
+        raw_items: rawLines.map(({ raw_material_id, quantity, unit_id }) => ({ raw_material_id, quantity, unit_id })),
         material_items: materialLines.map(({ production_material_id, quantity }) => ({ production_material_id, quantity })),
       }
       if (editRecord) {
@@ -141,7 +172,7 @@ export default function RecipesPage() {
 
   const totalLiquidLiters = rawLines.reduce((sum, line) => {
     const raw = rawByID.get(line.raw_material_id)
-    return raw?.base_unit?.name === 'л' ? sum + Number(line.quantity || 0) : sum
+    return (units.find((u) => u.id === (line.unit_id || raw?.base_unit?.id))?.name === 'л' || raw?.base_unit?.name === 'л') ? sum + Number(line.quantity || 0) : sum
   }, 0)
   const outputQuantity = Number(Form.useWatch('output_quantity', form) || 0)
   const volumePerUnit = outputQuantity > 0 ? totalLiquidLiters / outputQuantity : 0
@@ -169,7 +200,7 @@ export default function RecipesPage() {
     <div>
       <PageHeader
         title="Конструктор рецептов"
-        subtitle="Технологические карты с раздельными блоками сырья и материалов"
+        subtitle="Технологические карты с количествами, единицами измерения и материалами"
         crumbs={[{ label: 'Производство' }, { label: 'Рецепты' }]}
         action={(
           <Button type="primary" icon={<PlusOutlined />} size="large" onClick={openCreate} style={{ height: 48, fontWeight: 600 }}>
@@ -251,9 +282,14 @@ export default function RecipesPage() {
                 />
               </Form.Item>
             </Col>
-            <Col xs={24} md={6}>
-              <Form.Item name="output_quantity" label="Выход, шт" rules={[{ required: true, message: 'Укажите выход' }]}>
+            <Col xs={24} md={3}>
+              <Form.Item name="output_quantity" label="Выход" rules={[{ required: true, message: 'Укажите выход' }]}>
                 <InputNumber size="large" style={{ width: '100%' }} min={1} step={1} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={3}>
+              <Form.Item name="output_unit_id" label="ЕИ выхода">
+                <Select size="large" allowClear showSearch optionFilterProp="label" placeholder="ЕИ" options={units.map((u) => ({ label: u.name, value: u.id }))} />
               </Form.Item>
             </Col>
           </Row>
@@ -270,7 +306,7 @@ export default function RecipesPage() {
               <div className="recipe-block__header">
                 <div>
                   <div className="recipe-block__title">Необходимое сырьё</div>
-                  <Text type="secondary">Только позиции из справочника сырья.</Text>
+                  <Text type="secondary">Выберите позиции, количество и единицу измерения.</Text>
                 </div>
                 <Button onClick={() => setRawLines((prev) => [...prev, emptyRawLine()])}>Добавить</Button>
               </div>
@@ -292,7 +328,15 @@ export default function RecipesPage() {
                         step={0.1}
                         value={line.quantity}
                         onChange={(value) => updateRawLine(index, { quantity: Number(value || 0) })}
-                        addonAfter={selected?.base_unit?.name ?? 'ЕИ'}
+                        addonAfter={units.find((u) => u.id === (line.unit_id || selected?.base_unit?.id))?.name ?? 'ЕИ'}
+                      />
+                      <Select
+                        showSearch
+                        optionFilterProp="label"
+                        placeholder="ЕИ строки"
+                        value={line.unit_id || selected?.base_unit?.id}
+                        options={units.map((u) => ({ label: u.name, value: u.id }))}
+                        onChange={(value) => updateRawLine(index, { unit_id: value })}
                       />
                       <Button danger icon={<DeleteOutlined />} onClick={() => setRawLines((prev) => prev.filter((_, i) => i !== index))} />
                     </div>
@@ -306,7 +350,7 @@ export default function RecipesPage() {
               <div className="recipe-block__header">
                 <div>
                   <div className="recipe-block__title">Необходимые материалы</div>
-                  <Text type="secondary">Упаковка, тара, крышки и этикетки.</Text>
+                  <Text type="secondary">Выберите необходимые позиции из справочника материалов.</Text>
                 </div>
                 <Button onClick={() => setMaterialLines((prev) => [...prev, emptyMaterialLine()])}>Добавить</Button>
               </div>

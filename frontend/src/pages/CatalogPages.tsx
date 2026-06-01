@@ -31,7 +31,7 @@ export function UnitsPage() {
   return (
     <CatalogPage
       title="Единицы измерения"
-      subtitle="шт, кг, л, паллета, бочка и другие ЕИ"
+      subtitle="Единицы, используемые в учете и расчетах"
       crumbs={[{ label: 'Справочники' }, { label: 'Единицы измерения' }]}
       apiPath="/api/v1/units"
       fields={[
@@ -45,7 +45,7 @@ export function RawMaterialCategoriesPage() {
   return (
     <CatalogPage
       title="Категории сырья"
-      subtitle="ПАВ, кислоты, отдушки, вода и другие химические группы"
+      subtitle="Группы для классификации позиций справочника"
       crumbs={[{ label: 'Справочники' }, { label: 'Категории сырья' }]}
       apiPath="/api/v1/raw-material-categories"
       fields={[{ key: 'name', label: 'Название', type: 'text', required: true, searchable: true }]}
@@ -57,7 +57,7 @@ export function MaterialCategoriesPage() {
   return (
     <CatalogPage
       title="Категории материалов"
-      subtitle="Категории упаковки и материалов с признаком поддержки вместимости"
+      subtitle="Группы материалов и признак использования вместимости"
       crumbs={[{ label: 'Справочники' }, { label: 'Категории материалов' }]}
       apiPath="/api/v1/material-categories"
       fields={[
@@ -303,7 +303,7 @@ export function RawMaterialsPage() {
   return (
     <CatalogPage
       title="Сырьё"
-      subtitle="Изолированный справочник химических компонентов, жидкостей и реактивов"
+      subtitle="Справочник позиций с собственной категорией и базовой единицей учета"
       crumbs={[{ label: 'Справочники' }, { label: 'Сырьё' }]}
       apiPath="/api/v1/raw-materials"
       fields={[
@@ -327,7 +327,7 @@ export function MaterialsPage() {
   return (
     <CatalogPage
       title="Материалы"
-      subtitle="Изолированный справочник тары, крышек, этикеток, коробок и паллет"
+      subtitle="Справочник позиций с категорией, базовой ЕИ и опциональной вместимостью"
       crumbs={[{ label: 'Справочники' }, { label: 'Материалы' }]}
       apiPath="/api/v1/materials"
       fields={[
@@ -358,33 +358,6 @@ export function MaterialsPage() {
           remoteUrl: '/api/v1/units', remoteLabel: 'name', remoteValue: 'id', showWhen: hasCapacitySelected,
           hideInTable: true,
         },
-        {
-          key: 'has_capacity', label: 'Имеет вместимость', type: 'checkbox', required: false, hideInTable: true,
-          showWhen: categorySupportsCapacity, normalizePayload: normalizeCapacityPayload,
-        },
-        {
-          key: 'capacity_value', label: 'Вместимость — значение', type: 'number', required: true, min: 0.0001,
-          placeholder: 'Например: 1.0, 5.0, 12.0, 500.0', showWhen: hasCapacitySelected,
-          tableRender: (_val: any, row: any) => row.capacity_value
-            ? <Tag color="processing">{row.capacity_value} {row.capacity_unit?.name}</Tag>
-            : <span style={{ color: 'var(--color-text-muted)' }}>—</span>,
-        },
-        {
-          key: 'capacity_unit_id', label: 'Вместимость — ЕИ', type: 'select-remote', required: true,
-          remoteUrl: '/api/v1/units', remoteLabel: 'name', remoteValue: 'id', showWhen: hasCapacitySelected,
-          hideInTable: true,
-        },
-      ]}
-    />
-  )
-}
-
-export function NomenclaturePage() {
-  return (
-    <Tabs
-      items={[
-        { key: 'raw', label: 'Сырьё', children: <RawMaterialsPage /> },
-        { key: 'materials', label: 'Материалы', children: <MaterialsPage /> },
       ]}
     />
   )

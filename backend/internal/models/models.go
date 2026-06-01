@@ -116,6 +116,8 @@ type Recipe struct {
 	FinishedProduct   FinishedProduct            `gorm:"foreignKey:FinishedProductID" json:"finished_product,omitempty"`
 	Name              string                     `gorm:"not null" json:"name"`
 	OutputQuantity    float64                    `gorm:"not null" json:"output_quantity"`
+	OutputUnitID      *uint                      `json:"output_unit_id"`
+	OutputUnit        *UnitOfMeasure             `gorm:"foreignKey:OutputUnitID" json:"output_unit,omitempty"`
 	RawItems          []RecipeRawMaterial        `gorm:"foreignKey:RecipeID;constraint:OnDelete:CASCADE" json:"raw_items"`
 	MaterialItems     []RecipeProductionMaterial `gorm:"foreignKey:RecipeID;constraint:OnDelete:CASCADE" json:"material_items"`
 	CreatedAt         time.Time                  `json:"created_at"`
@@ -123,11 +125,13 @@ type Recipe struct {
 }
 
 type RecipeRawMaterial struct {
-	ID            uint        `gorm:"primaryKey;autoIncrement" json:"id"`
-	RecipeID      uint        `gorm:"not null;index" json:"recipe_id"`
-	RawMaterialID uint        `gorm:"not null;index" json:"raw_material_id"`
-	RawMaterial   RawMaterial `gorm:"foreignKey:RawMaterialID" json:"raw_material,omitempty"`
-	Quantity      float64     `gorm:"not null" json:"quantity"`
+	ID            uint           `gorm:"primaryKey;autoIncrement" json:"id"`
+	RecipeID      uint           `gorm:"not null;index" json:"recipe_id"`
+	RawMaterialID uint           `gorm:"not null;index" json:"raw_material_id"`
+	RawMaterial   RawMaterial    `gorm:"foreignKey:RawMaterialID" json:"raw_material,omitempty"`
+	Quantity      float64        `gorm:"not null" json:"quantity"`
+	UnitID        *uint          `json:"unit_id"`
+	Unit          *UnitOfMeasure `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
 }
 
 type RecipeProductionMaterial struct {
@@ -169,4 +173,100 @@ type AuditLog struct {
 	Action    string    `json:"action"`
 	Details   string    `gorm:"type:text" json:"details"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// ─────────────────────────────────────────────
+//  Производственный склад и планы
+// ─────────────────────────────────────────────
+
+type MainStockFinished struct {
+	ID                  uint            `gorm:"primaryKey;autoIncrement" json:"id"`
+	FinishedProductID   uint            `gorm:"uniqueIndex;not null" json:"finished_product_id"`
+	FinishedProduct     FinishedProduct `gorm:"foreignKey:FinishedProductID" json:"finished_product,omitempty"`
+	CurrentStockUnits   float64         `gorm:"not null;default:0" json:"current_stock_units"`
+	CurrentStockPallets float64         `gorm:"not null;default:0" json:"current_stock_pallets"`
+	UpdatedAt           time.Time       `json:"updated_at"`
+}
+
+type ProductionStockRaw struct {
+	ID            uint        `gorm:"primaryKey;autoIncrement" json:"id"`
+	RawMaterialID uint        `gorm:"uniqueIndex;not null" json:"raw_material_id"`
+	RawMaterial   RawMaterial `gorm:"foreignKey:RawMaterialID" json:"raw_material,omitempty"`
+	CurrentStock  float64     `gorm:"not null;default:0" json:"current_stock"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+}
+
+type ProductionStockMaterial struct {
+	ID                   uint               `gorm:"primaryKey;autoIncrement" json:"id"`
+	ProductionMaterialID uint               `gorm:"uniqueIndex;not null" json:"production_material_id"`
+	ProductionMaterial   ProductionMaterial `gorm:"foreignKey:ProductionMaterialID" json:"production_material,omitempty"`
+	CurrentStock         float64            `gorm:"not null;default:0" json:"current_stock"`
+	UpdatedAt            time.Time          `json:"updated_at"`
+}
+
+type ProductionStockFinished struct {
+	ID                uint            `gorm:"primaryKey;autoIncrement" json:"id"`
+	FinishedProductID uint            `gorm:"uniqueIndex;not null" json:"finished_product_id"`
+	FinishedProduct   FinishedProduct `gorm:"foreignKey:FinishedProductID" json:"finished_product,omitempty"`
+	CurrentStockUnits float64         `gorm:"not null;default:0" json:"current_stock_units"`
+	UpdatedAt         time.Time       `json:"updated_at"`
+}
+
+type InvoiceType string
+
+const (
+	InvoiceTypeRawReceipt       InvoiceType = "raw_receipt"
+	InvoiceTypeMaterialReceipt  InvoiceType = "material_receipt"
+	InvoiceTypeMixedReceipt     InvoiceType = "mixed_receipt"
+	InvoiceTypeRawIssue         InvoiceType = "raw_issue"
+	InvoiceTypeMaterialIssue    InvoiceType = "material_issue"
+	InvoiceTypeFinishedShipment InvoiceType = "finished_shipment"
+)
+
+type StockInvoiceStatus string
+
+const (
+	StockInvoicePending   StockInvoiceStatus = "PENDING"
+	StockInvoiceConfirmed StockInvoiceStatus = "CONFIRMED"
+)
+
+type StockInvoice struct {
+	ID          uint               `gorm:"primaryKey;autoIncrement" json:"id"`
+	Number      string             `gorm:"not null;index" json:"number"`
+	Type        InvoiceType        `gorm:"type:varchar(32);not null;index" json:"type"`
+	Status      StockInvoiceStatus `gorm:"type:varchar(24);not null;default:'PENDING';index" json:"status"`
+	EffectiveAt time.Time          `json:"effective_at"`
+	ConfirmedAt *time.Time         `json:"confirmed_at"`
+	CreatedAt   time.Time          `json:"created_at"`
+	Items       []StockInvoiceItem `gorm:"foreignKey:InvoiceID;constraint:OnDelete:CASCADE" json:"items,omitempty"`
+}
+
+type StockInvoiceItem struct {
+	ID                   uint                `gorm:"primaryKey;autoIncrement" json:"id"`
+	InvoiceID            uint                `gorm:"not null;index" json:"invoice_id"`
+	RawMaterialID        *uint               `gorm:"index" json:"raw_material_id"`
+	RawMaterial          *RawMaterial        `gorm:"foreignKey:RawMaterialID" json:"raw_material,omitempty"`
+	ProductionMaterialID *uint               `gorm:"index" json:"production_material_id"`
+	ProductionMaterial   *ProductionMaterial `gorm:"foreignKey:ProductionMaterialID" json:"production_material,omitempty"`
+	FinishedProductID    *uint               `gorm:"index" json:"finished_product_id"`
+	FinishedProduct      *FinishedProduct    `gorm:"foreignKey:FinishedProductID" json:"finished_product,omitempty"`
+	Quantity             float64             `gorm:"not null" json:"quantity"`
+}
+
+type ProductionPlanStatus string
+
+const (
+	ProductionPlanInProgress ProductionPlanStatus = "IN_PROGRESS"
+	ProductionPlanCompleted  ProductionPlanStatus = "COMPLETED"
+)
+
+type ProductionPlan struct {
+	ID                uint                 `gorm:"primaryKey;autoIncrement" json:"id"`
+	RecipeID          uint                 `gorm:"not null;index" json:"recipe_id"`
+	Recipe            Recipe               `gorm:"foreignKey:RecipeID" json:"recipe,omitempty"`
+	FinishedProductID uint                 `gorm:"not null;index" json:"finished_product_id"`
+	FinishedProduct   FinishedProduct      `gorm:"foreignKey:FinishedProductID" json:"finished_product,omitempty"`
+	TargetQuantity    float64              `gorm:"not null" json:"target_quantity"`
+	Status            ProductionPlanStatus `gorm:"type:varchar(24);not null;index" json:"status"`
+	CreatedAt         time.Time            `json:"created_at"`
 }

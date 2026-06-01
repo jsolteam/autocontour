@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Layout, Menu, Button, Typography, Avatar, Dropdown, Tag, Grid } from 'antd'
+import { Layout, Menu, Button, Typography, Avatar, Dropdown, Grid, Modal, Form, Input, Switch } from 'antd'
 import {
   DashboardOutlined, AppstoreOutlined, InboxOutlined, UserOutlined,
   LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, AuditOutlined,
   TeamOutlined, ControlOutlined, SafetyCertificateOutlined, ShopOutlined,
-  SlidersOutlined, NodeIndexOutlined, ExperimentOutlined,
+  SlidersOutlined, NodeIndexOutlined, ExperimentOutlined, FileTextOutlined, TableOutlined, SettingOutlined, CheckSquareOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
+import { useSettingsStore } from '../store/settingsStore'
 
 const { Sider, Content, Header } = Layout
 const { Text } = Typography
@@ -19,6 +20,9 @@ export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, logout, isAdmin } = useAuthStore()
+  const { companyName, setCompanyName, themeMode, setThemeMode } = useSettingsStore()
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsForm] = Form.useForm()
 
   useEffect(() => {
     if (isMobile) setCollapsed(true)
@@ -57,14 +61,29 @@ export default function AppLayout() {
     {
       key: '/warehouse',
       icon: <InboxOutlined />,
-      label: (
-        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-          Склад
-          <Tag style={{ fontSize: 9, lineHeight: '14px', height: 14, padding: '0 4px', marginLeft: 4 }}>
-            скоро
-          </Tag>
-        </span>
-      ),
+      label: 'Накладные и склад',
+    },
+    {
+      key: 'stockTables',
+      icon: <TableOutlined />,
+      label: 'Основные таблицы',
+      children: [
+        { key: '/stock-tables/production-finished', icon: <TableOutlined />, label: 'ГП производство' },
+        { key: '/stock-tables/main-finished', icon: <TableOutlined />, label: 'ГП склад' },
+        { key: '/stock-tables/raw', icon: <TableOutlined />, label: 'Сырьё склад' },
+        { key: '/stock-tables/materials', icon: <TableOutlined />, label: 'Материалы склад' },
+        { key: '/stock-tables/production', icon: <TableOutlined />, label: 'Склад производства' },
+      ],
+    },
+    {
+      key: '/production',
+      icon: <CheckSquareOutlined />,
+      label: 'Производство',
+    },
+    {
+      key: '/reports',
+      icon: <FileTextOutlined />,
+      label: 'Отчеты',
     },
     ...(isAdmin() ? [{
       key: 'admin',
@@ -95,6 +114,13 @@ export default function AppLayout() {
     },
     { type: 'divider' as const },
     {
+      key: 'settings',
+      icon: <SettingOutlined />,
+      label: 'Настройки',
+      onClick: () => { settingsForm.setFieldsValue({ company_name: companyName, dark_theme: themeMode === 'dark' }); setSettingsOpen(true) },
+    },
+    { type: 'divider' as const },
+    {
       key: 'logout',
       icon: <LogoutOutlined />,
       label: 'Выйти из системы',
@@ -114,7 +140,15 @@ export default function AppLayout() {
     '/finished-products': 'Готовая продукция',
     '/units': 'Единицы измерения',
     '/conversions': 'Коэффициенты перевода',
-    '/warehouse': 'Склад',
+    '/warehouse': 'Накладные и склад',
+    '/stock-tables': 'Основные таблицы',
+    '/stock-tables/production-finished': 'ГП производство',
+    '/stock-tables/main-finished': 'ГП склад',
+    '/stock-tables/raw': 'Сырьё склад',
+    '/stock-tables/materials': 'Материалы склад',
+    '/stock-tables/production': 'Склад производства',
+    '/production': 'Производство',
+    '/reports': 'Отчеты',
     '/recipes': 'Рецепты',
     '/users': 'Пользователи',
     '/roles': 'Роли и права',
@@ -160,24 +194,24 @@ export default function AppLayout() {
           </div>
           {!collapsed && (
             <div>
-              <div style={{ fontWeight: 800, color: '#fff', fontSize: 15, letterSpacing: '-0.01em', lineHeight: 1.2 }}>
-                АВТО<span style={{ color: '#4096ff' }}>КОНТУР</span>
+              <div style={{ fontWeight: 800, color: 'var(--color-text-primary)', fontSize: 15, letterSpacing: '-0.01em', lineHeight: 1.2 }}>
+                {companyName}
               </div>
               <div style={{ fontSize: 9, color: 'var(--color-text-muted)', letterSpacing: '0.1em' }}>
-                JSOL TEAM
+                ERP AUTOCONTOUR
               </div>
             </div>
           )}
         </div>
 
         <Menu
-          theme="dark"
+          theme={themeMode === 'dark' ? 'dark' : 'light'}
           mode="inline"
           selectedKeys={[location.pathname]}
           defaultOpenKeys={['catalogs', 'admin']}
           items={navItems}
           onClick={handleMenuClick}
-          style={{ border: 'none', background: 'transparent', flex: 1, overflowY: 'auto' }}
+          style={{ border: 'none', background: 'transparent', flex: 1, overflowY: 'auto', minHeight: 0 }}
         />
 
         {/* Version tag at bottom */}
@@ -187,7 +221,7 @@ export default function AppLayout() {
             letterSpacing: '0.06em', padding: '12px 8px',
             borderTop: '1px solid var(--color-border)', flexShrink: 0,
           }}>
-            v1.5.0 · Спринт 1.5
+            Локальная ERP-система
           </div>
         )}
       </Sider>
@@ -261,6 +295,28 @@ export default function AppLayout() {
           </div>
         </Content>
       </Layout>
+          <Modal
+        title="Системные настройки"
+        open={settingsOpen}
+        onCancel={() => setSettingsOpen(false)}
+        onOk={async () => {
+          const values = await settingsForm.validateFields()
+          setCompanyName(values.company_name)
+          setThemeMode(values.dark_theme ? 'dark' : 'light')
+          setSettingsOpen(false)
+        }}
+        okText="Сохранить"
+        cancelText="Отмена"
+      >
+        <Form form={settingsForm} layout="vertical" initialValues={{ company_name: companyName, dark_theme: themeMode === 'dark' }}>
+          <Form.Item name="company_name" label="Название компании" rules={[{ required: true, message: 'Введите название компании' }]}>
+            <Input size="large" />
+          </Form.Item>
+          <Form.Item name="dark_theme" label="Темная тема" valuePropName="checked">
+            <Switch checkedChildren="Вкл" unCheckedChildren="Выкл" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Layout>
   )
 }
