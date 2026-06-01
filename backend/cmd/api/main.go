@@ -85,6 +85,7 @@ func main() {
 	api.POST("/invoices", handlers.CreateStockInvoice)
 	api.POST("/invoices/:id/confirm", handlers.ConfirmStockInvoice)
 	api.POST("/invoices/:id/cancel", handlers.CancelStockInvoice)
+	api.POST("/stock/transfers", handlers.ManualStockTransfer)
 	api.GET("/reports/balances", handlers.BalanceReport)
 	api.GET("/reports/receipts", handlers.ReceiptsReport)
 	api.GET("/production/plans", handlers.ListProductionPlans)

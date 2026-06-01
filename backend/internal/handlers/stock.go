@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 
@@ -92,7 +93,7 @@ func ListMainStockFinished(c *gin.Context) {
 
 func ListProductionStockRaw(c *gin.Context) {
 	var items []models.ProductionStockRaw
-	database.DB.Preload("RawMaterial.Category").Preload("RawMaterial.BaseUnit").Order("raw_material_id").Find(&items)
+	database.DB.Preload("RawMaterial.Category").Preload("RawMaterial.BaseUnit").Preload("Unit").Order("raw_material_id").Find(&items)
 	c.JSON(http.StatusOK, items)
 }
 
@@ -189,6 +190,9 @@ func createInvoice(c *gin.Context, typ models.InvoiceType, input invoiceInput) {
 				if typ != models.InvoiceTypeFinishedShipment {
 					return fmt.Errorf("ГП можно использовать только в накладной отгрузки")
 				}
+				if !isWholeQuantity(line.Quantity) {
+					return fmt.Errorf("отгрузка ГП указывается целыми паллетами")
+				}
 				if err := tx.First(&models.FinishedProduct{}, line.ItemID).Error; err != nil {
 					return fmt.Errorf("ГП ID=%d не найдена", line.ItemID)
 				}
@@ -262,6 +266,9 @@ func ConfirmStockInvoice(c *gin.Context) {
 				}
 			}
 			if item.FinishedProductID != nil {
+				if !isWholeQuantity(item.Quantity) {
+					return fmt.Errorf("отгрузка ГП указывается целыми паллетами")
+				}
 				var stock models.MainStockFinished
 				tx.Where("finished_product_id = ?", *item.FinishedProductID).FirstOrInit(&stock)
 				stock.FinishedProductID = *item.FinishedProductID
@@ -290,6 +297,163 @@ func ConfirmStockInvoice(c *gin.Context) {
 	actorID, _ := c.Get("userID")
 	services.LogAction(actorID.(uint), "Подтверждение складской операции", fmt.Sprintf("Накладная %s", invoice.Number))
 	c.JSON(http.StatusOK, invoice)
+}
+
+type stockTransferInput struct {
+	ItemType  string  `json:"item_type" binding:"required"`
+	ItemID    uint    `json:"item_id" binding:"required"`
+	Direction string  `json:"direction" binding:"required"`
+	Quantity  float64 `json:"quantity" binding:"required"`
+	UnitID    *uint   `json:"unit_id"`
+}
+
+func ManualStockTransfer(c *gin.Context) {
+	var input stockTransferInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if input.Quantity <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Количество должно быть положительным"})
+		return
+	}
+	if input.Direction != "main_to_production" && input.Direction != "production_to_main" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Направление должно быть main_to_production или production_to_main"})
+		return
+	}
+
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		switch input.ItemType {
+		case "raw":
+			return transferRawStock(tx, input)
+		case "material":
+			return transferMaterialStock(tx, input)
+		case "finished":
+			return transferFinishedStock(tx, input)
+		default:
+			return fmt.Errorf("тип позиции должен быть raw, material или finished")
+		}
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	actorID, _ := c.Get("userID")
+	services.LogAction(actorID.(uint), "Ручное перемещение между складами", fmt.Sprintf("%s ID=%d, направление=%s, количество=%.4g", input.ItemType, input.ItemID, input.Direction, input.Quantity))
+	c.JSON(http.StatusOK, gin.H{"message": "Перемещение выполнено"})
+}
+
+func transferRawStock(tx *gorm.DB, input stockTransferInput) error {
+	var raw models.RawMaterial
+	if err := tx.First(&raw, input.ItemID).Error; err != nil {
+		return fmt.Errorf("сырьё ID=%d не найдено", input.ItemID)
+	}
+	productionUnitID := raw.BaseUnitID
+	if input.UnitID != nil {
+		productionUnitID = *input.UnitID
+	}
+	var prod models.ProductionStockRaw
+	tx.Where("raw_material_id = ?", raw.ID).FirstOrInit(&prod)
+	if input.Direction == "main_to_production" {
+		productionStock, err := productionRawStockInUnit(prod, raw, productionUnitID)
+		if err != nil {
+			return fmt.Errorf("нет коэффициента перевода производственного остатка сырья %s", raw.Name)
+		}
+		movedToProduction, err := moveWholeRawPackages(tx, raw, productionUnitID, input.Quantity)
+		if err != nil {
+			return err
+		}
+		prod.RawMaterialID = raw.ID
+		prod.UnitID = &productionUnitID
+		prod.CurrentStock = productionStock + movedToProduction
+		return tx.Save(&prod).Error
+	}
+	stockUnitID := raw.BaseUnitID
+	if prod.UnitID != nil {
+		stockUnitID = *prod.UnitID
+	}
+	if prod.CurrentStock+0.0001 < input.Quantity {
+		return fmt.Errorf("недостаточно сырья %s на складе производства", raw.Name)
+	}
+	returnedToMain, err := convertRawQuantityBetweenUnits(input.Quantity, raw.ID, stockUnitID, raw.BaseUnitID)
+	if err != nil {
+		return fmt.Errorf("нет коэффициента перевода сырья %s в складскую ЕИ", raw.Name)
+	}
+	prod.CurrentStock -= input.Quantity
+	if err := tx.Save(&prod).Error; err != nil {
+		return err
+	}
+	var main models.MainStockRaw
+	tx.Where("raw_material_id = ?", raw.ID).FirstOrInit(&main)
+	main.RawMaterialID = raw.ID
+	main.CurrentStock += returnedToMain
+	return tx.Save(&main).Error
+}
+
+func transferMaterialStock(tx *gorm.DB, input stockTransferInput) error {
+	var material models.ProductionMaterial
+	if err := tx.First(&material, input.ItemID).Error; err != nil {
+		return fmt.Errorf("материал ID=%d не найден", input.ItemID)
+	}
+	var main models.MainStockMaterial
+	tx.Where("production_material_id = ?", material.ID).FirstOrInit(&main)
+	main.ProductionMaterialID = material.ID
+	var prod models.ProductionStockMaterial
+	tx.Where("production_material_id = ?", material.ID).FirstOrInit(&prod)
+	prod.ProductionMaterialID = material.ID
+	if input.Direction == "main_to_production" {
+		if main.CurrentStock+0.0001 < input.Quantity {
+			return fmt.Errorf("недостаточно материала %s на основном складе", material.Name)
+		}
+		main.CurrentStock -= input.Quantity
+		prod.CurrentStock += input.Quantity
+	} else {
+		if prod.CurrentStock+0.0001 < input.Quantity {
+			return fmt.Errorf("недостаточно материала %s на складе производства", material.Name)
+		}
+		prod.CurrentStock -= input.Quantity
+		main.CurrentStock += input.Quantity
+	}
+	if err := tx.Save(&main).Error; err != nil {
+		return err
+	}
+	return tx.Save(&prod).Error
+}
+
+func transferFinishedStock(tx *gorm.DB, input stockTransferInput) error {
+	if !isWholeQuantity(input.Quantity) {
+		return fmt.Errorf("готовая продукция перемещается целыми паллетами")
+	}
+	var fp models.FinishedProduct
+	if err := tx.First(&fp, input.ItemID).Error; err != nil {
+		return fmt.Errorf("ГП ID=%d не найдена", input.ItemID)
+	}
+	units := input.Quantity * float64(fp.PalletCapacity)
+	var main models.MainStockFinished
+	tx.Where("finished_product_id = ?", fp.ID).FirstOrInit(&main)
+	main.FinishedProductID = fp.ID
+	var prod models.ProductionStockFinished
+	tx.Where("finished_product_id = ?", fp.ID).FirstOrInit(&prod)
+	prod.FinishedProductID = fp.ID
+	if input.Direction == "production_to_main" {
+		if prod.CurrentStockUnits+0.0001 < units {
+			return fmt.Errorf("недостаточно ГП %s на складе производства", fp.Name)
+		}
+		prod.CurrentStockUnits -= units
+		main.CurrentStockUnits += units
+		main.CurrentStockPallets += input.Quantity
+	} else {
+		if main.CurrentStockPallets+0.0001 < input.Quantity || main.CurrentStockUnits+0.0001 < units {
+			return fmt.Errorf("недостаточно паллет ГП %s на основном складе", fp.Name)
+		}
+		main.CurrentStockPallets -= input.Quantity
+		main.CurrentStockUnits -= units
+		prod.CurrentStockUnits += units
+	}
+	if err := tx.Save(&main).Error; err != nil {
+		return err
+	}
+	return tx.Save(&prod).Error
 }
 
 func CancelStockInvoice(c *gin.Context) {
@@ -367,4 +531,8 @@ func BalanceReport(c *gin.Context) {
 
 func ReceiptsReport(c *gin.Context) {
 	ListInvoices(c)
+}
+
+func isWholeQuantity(quantity float64) bool {
+	return math.Abs(quantity-math.Round(quantity)) <= 0.0001
 }

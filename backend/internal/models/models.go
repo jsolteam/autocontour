@@ -199,11 +199,13 @@ type MainStockFinished struct {
 }
 
 type ProductionStockRaw struct {
-	ID            uint        `gorm:"primaryKey;autoIncrement" json:"id"`
-	RawMaterialID uint        `gorm:"uniqueIndex;not null" json:"raw_material_id"`
-	RawMaterial   RawMaterial `gorm:"foreignKey:RawMaterialID" json:"raw_material,omitempty"`
-	CurrentStock  float64     `gorm:"not null;default:0" json:"current_stock"`
-	UpdatedAt     time.Time   `json:"updated_at"`
+	ID            uint           `gorm:"primaryKey;autoIncrement" json:"id"`
+	RawMaterialID uint           `gorm:"uniqueIndex;not null" json:"raw_material_id"`
+	RawMaterial   RawMaterial    `gorm:"foreignKey:RawMaterialID" json:"raw_material,omitempty"`
+	UnitID        *uint          `json:"unit_id"`
+	Unit          *UnitOfMeasure `gorm:"foreignKey:UnitID" json:"unit,omitempty"`
+	CurrentStock  float64        `gorm:"not null;default:0" json:"current_stock"`
+	UpdatedAt     time.Time      `json:"updated_at"`
 }
 
 type ProductionStockMaterial struct {

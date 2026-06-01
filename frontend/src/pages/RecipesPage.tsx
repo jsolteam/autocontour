@@ -43,6 +43,7 @@ export default function RecipesPage() {
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editRecord, setEditRecord] = useState<Recipe | null>(null)
+  const [referenceRecipe, setReferenceRecipe] = useState<{ outputQuantity: number; rawLines: RecipeRawLine[]; materialLines: RecipeMaterialLine[] } | null>(null)
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -76,6 +77,7 @@ export default function RecipesPage() {
     form.resetFields()
     setRawLines([emptyRawLine()])
     setMaterialLines([emptyMaterialLine()])
+    setReferenceRecipe(null)
     setModalOpen(true)
   }
 
@@ -87,8 +89,11 @@ export default function RecipesPage() {
       output_quantity: record.output_quantity,
       output_unit_id: record.output_unit_id,
     })
-    setRawLines(record.raw_items?.map((line) => ({ raw_material_id: line.raw_material_id, quantity: line.quantity, unit_id: line.unit_id })) || [emptyRawLine()])
-    setMaterialLines(record.material_items?.map((line) => ({ production_material_id: line.production_material_id, quantity: line.quantity })) || [emptyMaterialLine()])
+    const nextRawLines = record.raw_items?.map((line) => ({ raw_material_id: line.raw_material_id, quantity: line.quantity, unit_id: line.unit_id })) || [emptyRawLine()]
+    const nextMaterialLines = record.material_items?.map((line) => ({ production_material_id: line.production_material_id, quantity: line.quantity })) || [emptyMaterialLine()]
+    setRawLines(nextRawLines)
+    setMaterialLines(nextMaterialLines)
+    setReferenceRecipe({ outputQuantity: record.output_quantity, rawLines: nextRawLines, materialLines: nextMaterialLines })
     setModalOpen(true)
   }
 
@@ -97,15 +102,32 @@ export default function RecipesPage() {
   }
 
   const calculateRecipe = () => {
+    const outputQuantity = Number(form.getFieldValue('output_quantity') || 0)
     const total = rawLines.reduce((sum, line) => sum + Number(line.quantity || 0), 0)
     if (total <= 0) {
       message.error('Для расчета заполните количество сырья')
       return
     }
-    setRawLines((prev) => prev.map((line) => ({ ...line, quantity: Number(line.quantity.toFixed(4)) })))
-    message.success('Расчет выполнен: доли сырья пересчитаны от общей массы')
+    if (outputQuantity <= 0) {
+      message.error('Для расчета укажите выход продукции')
+      return
+    }
+    if (!referenceRecipe || referenceRecipe.outputQuantity <= 0) {
+      setReferenceRecipe({ outputQuantity, rawLines, materialLines })
+      message.success('Эталонное соотношение сырья зафиксировано')
+      return
+    }
+    const multiplier = outputQuantity / referenceRecipe.outputQuantity
+    setRawLines(referenceRecipe.rawLines.map((line) => ({
+      ...line,
+      quantity: Number((line.quantity * multiplier).toFixed(4)),
+    })))
+    setMaterialLines(referenceRecipe.materialLines.map((line) => ({
+      ...line,
+      quantity: Number((line.quantity * multiplier).toFixed(4)),
+    })))
+    message.success('Расчет выполнен: проценты сохранены, количества пересчитаны')
   }
-
 
   const updateMaterialLine = (index: number, patch: Partial<RecipeMaterialLine>) => {
     setMaterialLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)))
@@ -286,6 +308,7 @@ export default function RecipesPage() {
         <div className="recipe-summary">
           <Tag color="cyan">Сырьё в кг: {totalRawKg || 0} кг</Tag>
           <Tag color="processing">На 1 шт: {kgPerUnit ? kgPerUnit.toFixed(4) : '—'} кг</Tag>
+          <Tag color="gold">Проценты фиксированы — меняются количества</Tag>
           <Button onClick={calculateRecipe}>Сделать расчет</Button>
         </div>
 

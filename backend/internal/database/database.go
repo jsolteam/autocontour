@@ -179,6 +179,8 @@ func seed() {
 		{Method: "GET", Path: "/api/v1/invoices"},
 		{Method: "POST", Path: "/api/v1/invoices"},
 		{Method: "POST", Path: "/api/v1/invoices/:id/confirm"},
+		{Method: "POST", Path: "/api/v1/invoices/:id/cancel"},
+		{Method: "POST", Path: "/api/v1/stock/transfers"},
 		{Method: "GET", Path: "/api/v1/reports/balances"},
 		{Method: "GET", Path: "/api/v1/reports/receipts"},
 		{Method: "GET", Path: "/api/v1/production/plans"},

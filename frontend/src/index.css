@@ -608,10 +608,17 @@ html, body, #root {
 .ant-form-item {
   margin-bottom: 14px;
 }
-.recipe-line .ant-input-number,
 .invoice-line .ant-input-number,
-.recipe-line .ant-select,
 .invoice-line .ant-select {
   min-width: 180px;
   flex: 1 1 180px;
+}
+.recipe-line .ant-input-number,
+.recipe-line .ant-select {
+  min-width: 0;
+  width: 100%;
+}
+.recipe-line .ant-input-number-group-wrapper {
+  min-width: 0;
+  width: 100%;
 }

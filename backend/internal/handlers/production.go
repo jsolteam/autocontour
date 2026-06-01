@@ -47,31 +47,24 @@ func InitializeProductionPlan(c *gin.Context) {
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		for _, line := range recipe.RawItems {
 			required := line.Quantity * factor
-			stockUnitID := line.RawMaterial.BaseUnitID
-			if line.UnitID != nil && *line.UnitID != stockUnitID {
-				converted, err := convertRawQuantityToUnit(required, line.RawMaterialID, *line.UnitID, stockUnitID)
-				if err != nil {
-					return fmt.Errorf("нет коэффициента перевода для сырья %s", line.RawMaterial.Name)
-				}
-				required = converted
-			}
+			productionUnitID := rawProductionUnitID(line)
 			var prod models.ProductionStockRaw
 			tx.Where("raw_material_id = ?", line.RawMaterialID).FirstOrInit(&prod)
-			availableProd := prod.CurrentStock
-			deficit := math.Max(0, required-availableProd)
+			productionStock, err := productionRawStockInUnit(prod, line.RawMaterial, productionUnitID)
+			if err != nil {
+				shortages = append(shortages, fmt.Sprintf("%s: нет коэффициента перевода производственного остатка", line.RawMaterial.Name))
+				continue
+			}
+			deficit := math.Max(0, required-productionStock)
 			if deficit > 0 {
-				var main models.MainStockRaw
-				tx.Where("raw_material_id = ?", line.RawMaterialID).FirstOrInit(&main)
-				if main.CurrentStock+0.0001 < deficit {
-					shortages = append(shortages, fmt.Sprintf("%s: не хватает %.4g", line.RawMaterial.Name, deficit-main.CurrentStock))
+				movedToProduction, err := moveWholeRawPackages(tx, line.RawMaterial, productionUnitID, deficit)
+				if err != nil {
+					shortages = append(shortages, err.Error())
 					continue
 				}
-				main.CurrentStock -= deficit
 				prod.RawMaterialID = line.RawMaterialID
-				prod.CurrentStock += deficit
-				if err := tx.Save(&main).Error; err != nil {
-					return err
-				}
+				prod.UnitID = &productionUnitID
+				prod.CurrentStock = productionStock + movedToProduction
 				if err := tx.Save(&prod).Error; err != nil {
 					return err
 				}
@@ -134,22 +127,20 @@ func CompleteProductionPlan(c *gin.Context) {
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		for _, line := range plan.Recipe.RawItems {
 			required := line.Quantity * factor
-			stockUnitID := line.RawMaterial.BaseUnitID
-			if line.UnitID != nil && *line.UnitID != stockUnitID {
-				converted, err := convertRawQuantityToUnit(required, line.RawMaterialID, *line.UnitID, stockUnitID)
-				if err != nil {
-					return fmt.Errorf("нет коэффициента перевода для сырья %s", line.RawMaterial.Name)
-				}
-				required = converted
-			}
+			productionUnitID := rawProductionUnitID(line)
 			var stock models.ProductionStockRaw
 			if err := tx.Where("raw_material_id = ?", line.RawMaterialID).First(&stock).Error; err != nil {
 				return fmt.Errorf("на складе производства нет сырья %s", line.RawMaterial.Name)
 			}
-			if stock.CurrentStock+0.0001 < required {
+			productionStock, err := productionRawStockInUnit(stock, line.RawMaterial, productionUnitID)
+			if err != nil {
+				return fmt.Errorf("нет коэффициента перевода производственного остатка сырья %s", line.RawMaterial.Name)
+			}
+			if productionStock+0.0001 < required {
 				return fmt.Errorf("недостаточно сырья %s на складе производства", line.RawMaterial.Name)
 			}
-			stock.CurrentStock -= required
+			stock.UnitID = &productionUnitID
+			stock.CurrentStock = productionStock - required
 			if err := tx.Save(&stock).Error; err != nil {
 				return err
 			}
@@ -202,6 +193,10 @@ func PackFinishedToPallets(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Количество паллет должно быть положительным"})
 		return
 	}
+	if math.Abs(input.Pallets-math.Round(input.Pallets)) > 0.0001 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Количество паллет должно быть целым"})
+		return
+	}
 	var fp models.FinishedProduct
 	if err := database.DB.First(&fp, input.FinishedProductID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "ГП не найдена"})
@@ -236,15 +231,61 @@ func PackFinishedToPallets(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "ГП упакована в паллеты"})
 }
 
-func convertRawQuantityToUnit(quantity float64, rawID uint, fromUnitID uint, toUnitID uint) (float64, error) {
+func rawProductionUnitID(line models.RecipeRawMaterial) uint {
+	if line.UnitID != nil {
+		return *line.UnitID
+	}
+	return line.RawMaterial.BaseUnitID
+}
+
+func productionRawStockInUnit(stock models.ProductionStockRaw, raw models.RawMaterial, targetUnitID uint) (float64, error) {
+	stockUnitID := raw.BaseUnitID
+	if stock.UnitID != nil {
+		stockUnitID = *stock.UnitID
+	}
+	return convertRawQuantityBetweenUnits(stock.CurrentStock, raw.ID, stockUnitID, targetUnitID)
+}
+
+func moveWholeRawPackages(tx *gorm.DB, raw models.RawMaterial, productionUnitID uint, deficitInProductionUnit float64) (float64, error) {
+	var main models.MainStockRaw
+	tx.Where("raw_material_id = ?", raw.ID).FirstOrInit(&main)
+	main.RawMaterialID = raw.ID
+
+	mainUnitsNeeded, err := convertRawQuantityBetweenUnits(deficitInProductionUnit, raw.ID, productionUnitID, raw.BaseUnitID)
+	if err != nil {
+		return 0, fmt.Errorf("%s: нет коэффициента перевода в складскую ЕИ", raw.Name)
+	}
+	mainUnitsToMove := math.Ceil(mainUnitsNeeded - 0.0001)
+	if mainUnitsToMove < 1 {
+		mainUnitsToMove = 1
+	}
+	if main.CurrentStock+0.0001 < mainUnitsToMove {
+		return 0, fmt.Errorf("%s: не хватает %.4g", raw.Name, mainUnitsToMove-main.CurrentStock)
+	}
+	movedToProduction, err := convertRawQuantityBetweenUnits(mainUnitsToMove, raw.ID, raw.BaseUnitID, productionUnitID)
+	if err != nil {
+		return 0, fmt.Errorf("%s: нет коэффициента перевода из складской ЕИ", raw.Name)
+	}
+	main.CurrentStock -= mainUnitsToMove
+	if err := tx.Save(&main).Error; err != nil {
+		return 0, err
+	}
+	return movedToProduction, nil
+}
+
+func convertRawQuantityBetweenUnits(quantity float64, rawID uint, fromUnitID uint, toUnitID uint) (float64, error) {
 	if fromUnitID == toUnitID {
 		return quantity, nil
 	}
 	conversion, err := findRawConversion(rawID, fromUnitID, toUnitID)
-	if err != nil {
+	if err == nil {
+		return quantity * conversion.Coefficient, nil
+	}
+	reverse, reverseErr := findRawConversion(rawID, toUnitID, fromUnitID)
+	if reverseErr != nil || reverse.Coefficient == 0 {
 		return 0, err
 	}
-	return quantity * conversion.Coefficient, nil
+	return quantity / reverse.Coefficient, nil
 }
 
 func CancelProductionPlan(c *gin.Context) {
