@@ -8,6 +8,7 @@ import (
 	"github.com/jsolteam/autocontour/internal/database"
 	"github.com/jsolteam/autocontour/internal/models"
 	"github.com/jsolteam/autocontour/internal/services"
+	"gorm.io/gorm"
 )
 
 func ListMainStockRaw(c *gin.Context) {
@@ -80,4 +81,150 @@ func UpsertMainStockMaterial(c *gin.Context) {
 	actorID, _ := c.Get("userID")
 	services.LogAction(actorID.(uint), "Изменение основного склада материалов", fmt.Sprintf("Материал ID=%d, остаток=%f", input.ProductionMaterialID, input.CurrentStock))
 	c.JSON(http.StatusOK, item)
+}
+
+func ListMainStockFinished(c *gin.Context) {
+	var items []models.MainStockFinished
+	database.DB.Preload("FinishedProduct.BaseUnit").Order("finished_product_id").Find(&items)
+	c.JSON(http.StatusOK, items)
+}
+
+func ListProductionStockRaw(c *gin.Context) {
+	var items []models.ProductionStockRaw
+	database.DB.Preload("RawMaterial.Category").Preload("RawMaterial.BaseUnit").Order("raw_material_id").Find(&items)
+	c.JSON(http.StatusOK, items)
+}
+
+func ListProductionStockMaterials(c *gin.Context) {
+	var items []models.ProductionStockMaterial
+	database.DB.Preload("ProductionMaterial.Category").Preload("ProductionMaterial.BaseUnit").Preload("ProductionMaterial.CapacityUnit").Order("production_material_id").Find(&items)
+	c.JSON(http.StatusOK, items)
+}
+
+func ListProductionStockFinished(c *gin.Context) {
+	var items []models.ProductionStockFinished
+	database.DB.Preload("FinishedProduct.BaseUnit").Order("finished_product_id").Find(&items)
+	c.JSON(http.StatusOK, items)
+}
+
+type invoiceInput struct {
+	Number string `json:"number" binding:"required"`
+	Items  []struct {
+		ItemID   uint    `json:"item_id" binding:"required"`
+		Quantity float64 `json:"quantity" binding:"required"`
+	} `json:"items" binding:"required"`
+}
+
+func CreateRawReceiptInvoice(c *gin.Context) {
+	createReceiptInvoice(c, models.InvoiceTypeRawReceipt)
+}
+
+func CreateMaterialReceiptInvoice(c *gin.Context) {
+	createReceiptInvoice(c, models.InvoiceTypeMaterialReceipt)
+}
+
+func createReceiptInvoice(c *gin.Context, typ models.InvoiceType) {
+	var input invoiceInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(input.Items) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Добавьте хотя бы одну строку накладной"})
+		return
+	}
+	actorID, _ := c.Get("userID")
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		invoice := models.StockInvoice{Number: input.Number, Type: typ}
+		if err := tx.Create(&invoice).Error; err != nil {
+			return err
+		}
+		for _, line := range input.Items {
+			if line.Quantity <= 0 {
+				return fmt.Errorf("количество в накладной должно быть положительным")
+			}
+			item := models.StockInvoiceItem{InvoiceID: invoice.ID, Quantity: line.Quantity}
+			if typ == models.InvoiceTypeRawReceipt {
+				var raw models.RawMaterial
+				if err := tx.First(&raw, line.ItemID).Error; err != nil {
+					return fmt.Errorf("сырьё ID=%d не найдено", line.ItemID)
+				}
+				item.RawMaterialID = &line.ItemID
+				var stock models.MainStockRaw
+				tx.Where("raw_material_id = ?", line.ItemID).FirstOrInit(&stock)
+				stock.RawMaterialID = line.ItemID
+				stock.CurrentStock += line.Quantity
+				if err := tx.Save(&stock).Error; err != nil {
+					return err
+				}
+			} else {
+				var material models.ProductionMaterial
+				if err := tx.First(&material, line.ItemID).Error; err != nil {
+					return fmt.Errorf("материал ID=%d не найден", line.ItemID)
+				}
+				item.ProductionMaterialID = &line.ItemID
+				var stock models.MainStockMaterial
+				tx.Where("production_material_id = ?", line.ItemID).FirstOrInit(&stock)
+				stock.ProductionMaterialID = line.ItemID
+				stock.CurrentStock += line.Quantity
+				if err := tx.Save(&stock).Error; err != nil {
+					return err
+				}
+			}
+			if err := tx.Create(&item).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	services.LogAction(actorID.(uint), "Приход по накладной", fmt.Sprintf("Накладная %s, тип=%s", input.Number, typ))
+	c.JSON(http.StatusCreated, gin.H{"message": "Накладная проведена"})
+}
+
+func ListInvoices(c *gin.Context) {
+	var items []models.StockInvoice
+	q := database.DB.Preload("Items.RawMaterial.BaseUnit").Preload("Items.ProductionMaterial.BaseUnit").Order("created_at DESC")
+	if typ := c.Query("type"); typ != "" {
+		q = q.Where("type = ?", typ)
+	}
+	q.Find(&items)
+	c.JSON(http.StatusOK, items)
+}
+
+func BalanceReport(c *gin.Context) {
+	type row struct {
+		Name            string  `json:"name"`
+		Type            string  `json:"type"`
+		MainStock       float64 `json:"main_stock"`
+		ProductionStock float64 `json:"production_stock"`
+		Total           float64 `json:"total"`
+		Unit            string  `json:"unit"`
+	}
+	rows := []row{}
+	database.DB.Raw(`
+		SELECT rm.name, 'Сырьё' AS type, COALESCE(ms.current_stock,0) main_stock, COALESCE(ps.current_stock,0) production_stock,
+		COALESCE(ms.current_stock,0)+COALESCE(ps.current_stock,0) total, u.name unit
+		FROM raw_materials rm JOIN unit_of_measures u ON u.id=rm.base_unit_id
+		LEFT JOIN main_stock_raws ms ON ms.raw_material_id=rm.id
+		LEFT JOIN production_stock_raws ps ON ps.raw_material_id=rm.id
+		UNION ALL
+		SELECT pm.name, 'Материал', COALESCE(ms.current_stock,0), COALESCE(ps.current_stock,0), COALESCE(ms.current_stock,0)+COALESCE(ps.current_stock,0), u.name
+		FROM production_materials pm JOIN unit_of_measures u ON u.id=pm.base_unit_id
+		LEFT JOIN main_stock_materials ms ON ms.production_material_id=pm.id
+		LEFT JOIN production_stock_materials ps ON ps.production_material_id=pm.id
+		UNION ALL
+		SELECT fp.name, 'ГП', COALESCE(ms.current_stock_units,0), COALESCE(ps.current_stock_units,0), COALESCE(ms.current_stock_units,0)+COALESCE(ps.current_stock_units,0), u.name
+		FROM finished_products fp JOIN unit_of_measures u ON u.id=fp.base_unit_id
+		LEFT JOIN main_stock_finisheds ms ON ms.finished_product_id=fp.id
+		LEFT JOIN production_stock_finisheds ps ON ps.finished_product_id=fp.id
+	`).Scan(&rows)
+	c.JSON(http.StatusOK, rows)
+}
+
+func ReceiptsReport(c *gin.Context) {
+	ListInvoices(c)
 }

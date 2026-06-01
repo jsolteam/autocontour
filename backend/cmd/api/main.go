@@ -75,6 +75,17 @@ func main() {
 	api.POST("/main-stock/raw", handlers.UpsertMainStockRaw)
 	api.GET("/main-stock/materials", handlers.ListMainStockMaterials)
 	api.POST("/main-stock/materials", handlers.UpsertMainStockMaterial)
+	api.GET("/main-stock/finished", handlers.ListMainStockFinished)
+	api.GET("/production-stock/raw", handlers.ListProductionStockRaw)
+	api.GET("/production-stock/materials", handlers.ListProductionStockMaterials)
+	api.GET("/production-stock/finished", handlers.ListProductionStockFinished)
+	api.POST("/invoices/raw-receipts", handlers.CreateRawReceiptInvoice)
+	api.POST("/invoices/material-receipts", handlers.CreateMaterialReceiptInvoice)
+	api.GET("/invoices", handlers.ListInvoices)
+	api.GET("/reports/balances", handlers.BalanceReport)
+	api.GET("/reports/receipts", handlers.ReceiptsReport)
+	api.GET("/production/plans", handlers.ListProductionPlans)
+	api.POST("/production/initialize-plan", handlers.InitializeProductionPlan)
 
 	// Finished Products
 	api.GET("/finished-products", handlers.ListFinishedProducts)

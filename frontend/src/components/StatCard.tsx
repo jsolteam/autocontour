@@ -47,7 +47,7 @@ export default function StatCard({ label, value, icon, color = '#1677ff', loadin
         </div>
         {icon && (
           <div style={{
-            width: 44, height: 44,
+            width: 44, height: 44, flexShrink: 0, lineHeight: 1,
             background: `${color}18`,
             border: `1px solid ${color}30`,
             borderRadius: 10,

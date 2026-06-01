@@ -15,6 +15,8 @@ import UsersPage from './pages/UsersPage'
 import RolesPage from './pages/RolesPage'
 import AuditPage from './pages/AuditPage'
 import WarehousePage from './pages/WarehousePage'
+import StockTablesPage from './pages/StockTablesPage'
+import ReportsPage from './pages/ReportsPage'
 import RecipesPage from './pages/RecipesPage'
 import NotFound from './pages/NotFound'
 import './index.css'
@@ -77,6 +79,8 @@ export default function App() {
             <Route path="units" element={<UnitsPage />} />
             <Route path="conversions" element={<ConversionsPage />} />
             <Route path="warehouse" element={<WarehousePage />} />
+            <Route path="stock-tables" element={<StockTablesPage />} />
+            <Route path="reports" element={<ReportsPage />} />
             <Route path="recipes" element={<RecipesPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="roles" element={<RolesPage />} />
