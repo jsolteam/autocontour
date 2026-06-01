@@ -176,10 +176,14 @@ func seed() {
 		{Method: "POST", Path: "/api/v1/invoices/raw-receipts"},
 		{Method: "POST", Path: "/api/v1/invoices/material-receipts"},
 		{Method: "GET", Path: "/api/v1/invoices"},
+		{Method: "POST", Path: "/api/v1/invoices"},
+		{Method: "POST", Path: "/api/v1/invoices/:id/confirm"},
 		{Method: "GET", Path: "/api/v1/reports/balances"},
 		{Method: "GET", Path: "/api/v1/reports/receipts"},
 		{Method: "GET", Path: "/api/v1/production/plans"},
 		{Method: "POST", Path: "/api/v1/production/initialize-plan"},
+		{Method: "POST", Path: "/api/v1/production/plans/:id/complete"},
+		{Method: "POST", Path: "/api/v1/production/pack-pallets"},
 		{Method: "GET", Path: "/api/v1/audit"},
 	}
 	var createdPerms []models.Permission

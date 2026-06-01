@@ -106,3 +106,112 @@ func InitializeProductionPlan(c *gin.Context) {
 	services.LogAction(actorID.(uint), "Запуск производственного плана", fmt.Sprintf("Рецепт ID=%d, цель=%.4g", input.RecipeID, input.TargetQuantity))
 	c.JSON(http.StatusCreated, gin.H{"message": "План запущен"})
 }
+
+func CompleteProductionPlan(c *gin.Context) {
+	id := c.Param("id")
+	var plan models.ProductionPlan
+	if err := database.DB.Preload("Recipe.RawItems.RawMaterial").Preload("Recipe.MaterialItems.ProductionMaterial").Preload("FinishedProduct").First(&plan, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "План не найден"})
+		return
+	}
+	if plan.Status == models.ProductionPlanCompleted {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "План уже завершен"})
+		return
+	}
+	factor := plan.TargetQuantity / plan.Recipe.OutputQuantity
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		for _, line := range plan.Recipe.RawItems {
+			required := line.Quantity * factor
+			var stock models.ProductionStockRaw
+			if err := tx.Where("raw_material_id = ?", line.RawMaterialID).First(&stock).Error; err != nil {
+				return fmt.Errorf("на складе производства нет сырья %s", line.RawMaterial.Name)
+			}
+			if stock.CurrentStock+0.0001 < required {
+				return fmt.Errorf("недостаточно сырья %s на складе производства", line.RawMaterial.Name)
+			}
+			stock.CurrentStock -= required
+			if err := tx.Save(&stock).Error; err != nil {
+				return err
+			}
+		}
+		for _, line := range plan.Recipe.MaterialItems {
+			required := line.Quantity * factor
+			var stock models.ProductionStockMaterial
+			if err := tx.Where("production_material_id = ?", line.ProductionMaterialID).First(&stock).Error; err != nil {
+				return fmt.Errorf("на складе производства нет материала %s", line.ProductionMaterial.Name)
+			}
+			if stock.CurrentStock+0.0001 < required {
+				return fmt.Errorf("недостаточно материала %s на складе производства", line.ProductionMaterial.Name)
+			}
+			stock.CurrentStock -= required
+			if err := tx.Save(&stock).Error; err != nil {
+				return err
+			}
+		}
+		var finished models.ProductionStockFinished
+		tx.Where("finished_product_id = ?", plan.FinishedProductID).FirstOrInit(&finished)
+		finished.FinishedProductID = plan.FinishedProductID
+		finished.CurrentStockUnits += plan.TargetQuantity
+		if err := tx.Save(&finished).Error; err != nil {
+			return err
+		}
+		plan.Status = models.ProductionPlanCompleted
+		return tx.Save(&plan).Error
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	actorID, _ := c.Get("userID")
+	services.LogAction(actorID.(uint), "Завершение производственного плана", fmt.Sprintf("План ID=%s", id))
+	c.JSON(http.StatusOK, gin.H{"message": "План завершен"})
+}
+
+type packPalletsInput struct {
+	FinishedProductID uint    `json:"finished_product_id" binding:"required"`
+	Pallets           float64 `json:"pallets" binding:"required"`
+}
+
+func PackFinishedToPallets(c *gin.Context) {
+	var input packPalletsInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if input.Pallets <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Количество паллет должно быть положительным"})
+		return
+	}
+	var fp models.FinishedProduct
+	if err := database.DB.First(&fp, input.FinishedProductID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "ГП не найдена"})
+		return
+	}
+	units := input.Pallets * float64(fp.PalletCapacity)
+	err := database.DB.Transaction(func(tx *gorm.DB) error {
+		var production models.ProductionStockFinished
+		if err := tx.Where("finished_product_id = ?", input.FinishedProductID).First(&production).Error; err != nil {
+			return fmt.Errorf("нет цехового остатка ГП")
+		}
+		if production.CurrentStockUnits+0.0001 < units {
+			return fmt.Errorf("недостаточно ГП в производстве: нужно %.4g шт", units)
+		}
+		production.CurrentStockUnits -= units
+		if err := tx.Save(&production).Error; err != nil {
+			return err
+		}
+		var main models.MainStockFinished
+		tx.Where("finished_product_id = ?", input.FinishedProductID).FirstOrInit(&main)
+		main.FinishedProductID = input.FinishedProductID
+		main.CurrentStockUnits += units
+		main.CurrentStockPallets += input.Pallets
+		return tx.Save(&main).Error
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	actorID, _ := c.Get("userID")
+	services.LogAction(actorID.(uint), "Упаковка ГП в паллеты", fmt.Sprintf("ГП ID=%d, паллет=%.4g", input.FinishedProductID, input.Pallets))
+	c.JSON(http.StatusOK, gin.H{"message": "ГП упакована в паллеты"})
+}

@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ConfigProvider, theme } from 'antd'
 import ruRU from 'antd/locale/ru_RU'
 import { useAuthStore } from './store/authStore'
+import { useSettingsStore } from './store/settingsStore'
 import ServerSetup from './pages/ServerSetup'
 import Login from './pages/Login'
 import AppLayout from './components/AppLayout'
@@ -17,6 +18,7 @@ import AuditPage from './pages/AuditPage'
 import WarehousePage from './pages/WarehousePage'
 import StockTablesPage from './pages/StockTablesPage'
 import ReportsPage from './pages/ReportsPage'
+import ProductionPage from './pages/ProductionPage'
 import RecipesPage from './pages/RecipesPage'
 import NotFound from './pages/NotFound'
 import './index.css'
@@ -32,10 +34,15 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const [serverConfigured, setServerConfigured] = useState<boolean>(!!localStorage.getItem('server_url'))
+  const themeMode = useSettingsStore((s) => s.themeMode)
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeMode
+  }, [themeMode])
 
   if (!serverConfigured) {
     return (
-      <ConfigProvider locale={ruRU} theme={{ algorithm: theme.darkAlgorithm }}>
+      <ConfigProvider locale={ruRU} theme={{ algorithm: themeMode === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm }}>
         <ServerSetup onConfigured={() => setServerConfigured(true)} />
       </ConfigProvider>
     )
@@ -45,17 +52,17 @@ export default function App() {
     <ConfigProvider
       locale={ruRU}
       theme={{
-        algorithm: theme.darkAlgorithm,
+        algorithm: themeMode === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
           colorPrimary: '#1677ff',
           borderRadius: 6,
           fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
           fontSize: 14,
-          colorBgContainer: '#161b22',
-          colorBgElevated: '#21262d',
-          colorBorder: '#30363d',
-          colorText: '#e6edf3',
-          colorTextSecondary: '#8b949e',
+          colorBgContainer: themeMode === 'dark' ? '#161b22' : '#ffffff',
+          colorBgElevated: themeMode === 'dark' ? '#21262d' : '#ffffff',
+          colorBorder: themeMode === 'dark' ? '#30363d' : '#d9e2ef',
+          colorText: themeMode === 'dark' ? '#e6edf3' : '#172033',
+          colorTextSecondary: themeMode === 'dark' ? '#8b949e' : '#4f5f75',
         },
         components: {
           Button: { controlHeight: 36, controlHeightLG: 48 },
@@ -80,7 +87,9 @@ export default function App() {
             <Route path="conversions" element={<ConversionsPage />} />
             <Route path="warehouse" element={<WarehousePage />} />
             <Route path="stock-tables" element={<StockTablesPage />} />
+            <Route path="stock-tables/:table" element={<StockTablesPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="production" element={<ProductionPage />} />
             <Route path="recipes" element={<RecipesPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="roles" element={<RolesPage />} />

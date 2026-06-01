@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Button, Form, Input, InputNumber, message, Modal, Popconfirm,
   Select, Space, Table, Tag, Typography, Row, Col,
@@ -43,6 +43,7 @@ export default function RecipesPage() {
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [editRecord, setEditRecord] = useState<Recipe | null>(null)
+  const proportionConfirmOpen = useRef(false)
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -97,7 +98,8 @@ export default function RecipesPage() {
       const current = rawLines[index]
       const oldQuantity = Number(current?.quantity || 0)
       const nextQuantity = Number(patch.quantity || 0)
-      if (oldQuantity > 0 && nextQuantity > 0 && rawLines.length > 1) {
+      if (oldQuantity > 0 && nextQuantity > 0 && rawLines.length > 1 && !proportionConfirmOpen.current) {
+        proportionConfirmOpen.current = true
         Modal.confirm({
           title: 'Нужно ли изменить пропорции?',
           content: 'Количество одной позиции изменилось. Пересчитать остальные компоненты по текущей пропорции?',
@@ -106,8 +108,12 @@ export default function RecipesPage() {
           onOk: () => {
             const factor = nextQuantity / oldQuantity
             setRawLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : { ...line, quantity: Number((line.quantity * factor).toFixed(4)) })))
+            proportionConfirmOpen.current = false
           },
-          onCancel: () => setRawLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line))),
+          onCancel: () => {
+            setRawLines((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)))
+            proportionConfirmOpen.current = false
+          },
         })
         return
       }
@@ -194,7 +200,7 @@ export default function RecipesPage() {
     <div>
       <PageHeader
         title="Конструктор рецептов"
-        subtitle="Технологические карты с раздельными блоками сырья и материалов"
+        subtitle="Технологические карты с количествами, единицами измерения и материалами"
         crumbs={[{ label: 'Производство' }, { label: 'Рецепты' }]}
         action={(
           <Button type="primary" icon={<PlusOutlined />} size="large" onClick={openCreate} style={{ height: 48, fontWeight: 600 }}>
@@ -300,7 +306,7 @@ export default function RecipesPage() {
               <div className="recipe-block__header">
                 <div>
                   <div className="recipe-block__title">Необходимое сырьё</div>
-                  <Text type="secondary">Только позиции из справочника сырья.</Text>
+                  <Text type="secondary">Выберите позиции, количество и единицу измерения.</Text>
                 </div>
                 <Button onClick={() => setRawLines((prev) => [...prev, emptyRawLine()])}>Добавить</Button>
               </div>
@@ -344,7 +350,7 @@ export default function RecipesPage() {
               <div className="recipe-block__header">
                 <div>
                   <div className="recipe-block__title">Необходимые материалы</div>
-                  <Text type="secondary">Упаковка, тара, крышки и этикетки.</Text>
+                  <Text type="secondary">Выберите необходимые позиции из справочника материалов.</Text>
                 </div>
                 <Button onClick={() => setMaterialLines((prev) => [...prev, emptyMaterialLine()])}>Добавить</Button>
               </div>

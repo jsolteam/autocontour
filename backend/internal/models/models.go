@@ -215,16 +215,30 @@ type ProductionStockFinished struct {
 type InvoiceType string
 
 const (
-	InvoiceTypeRawReceipt      InvoiceType = "raw_receipt"
-	InvoiceTypeMaterialReceipt InvoiceType = "material_receipt"
+	InvoiceTypeRawReceipt       InvoiceType = "raw_receipt"
+	InvoiceTypeMaterialReceipt  InvoiceType = "material_receipt"
+	InvoiceTypeMixedReceipt     InvoiceType = "mixed_receipt"
+	InvoiceTypeRawIssue         InvoiceType = "raw_issue"
+	InvoiceTypeMaterialIssue    InvoiceType = "material_issue"
+	InvoiceTypeFinishedShipment InvoiceType = "finished_shipment"
+)
+
+type StockInvoiceStatus string
+
+const (
+	StockInvoicePending   StockInvoiceStatus = "PENDING"
+	StockInvoiceConfirmed StockInvoiceStatus = "CONFIRMED"
 )
 
 type StockInvoice struct {
-	ID        uint               `gorm:"primaryKey;autoIncrement" json:"id"`
-	Number    string             `gorm:"not null;index" json:"number"`
-	Type      InvoiceType        `gorm:"type:varchar(32);not null;index" json:"type"`
-	CreatedAt time.Time          `json:"created_at"`
-	Items     []StockInvoiceItem `gorm:"foreignKey:InvoiceID;constraint:OnDelete:CASCADE" json:"items,omitempty"`
+	ID          uint               `gorm:"primaryKey;autoIncrement" json:"id"`
+	Number      string             `gorm:"not null;index" json:"number"`
+	Type        InvoiceType        `gorm:"type:varchar(32);not null;index" json:"type"`
+	Status      StockInvoiceStatus `gorm:"type:varchar(24);not null;default:'PENDING';index" json:"status"`
+	EffectiveAt time.Time          `json:"effective_at"`
+	ConfirmedAt *time.Time         `json:"confirmed_at"`
+	CreatedAt   time.Time          `json:"created_at"`
+	Items       []StockInvoiceItem `gorm:"foreignKey:InvoiceID;constraint:OnDelete:CASCADE" json:"items,omitempty"`
 }
 
 type StockInvoiceItem struct {
@@ -234,6 +248,8 @@ type StockInvoiceItem struct {
 	RawMaterial          *RawMaterial        `gorm:"foreignKey:RawMaterialID" json:"raw_material,omitempty"`
 	ProductionMaterialID *uint               `gorm:"index" json:"production_material_id"`
 	ProductionMaterial   *ProductionMaterial `gorm:"foreignKey:ProductionMaterialID" json:"production_material,omitempty"`
+	FinishedProductID    *uint               `gorm:"index" json:"finished_product_id"`
+	FinishedProduct      *FinishedProduct    `gorm:"foreignKey:FinishedProductID" json:"finished_product,omitempty"`
 	Quantity             float64             `gorm:"not null" json:"quantity"`
 }
 

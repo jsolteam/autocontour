@@ -197,6 +197,11 @@ func validateRecipeInput(input recipeInput) error {
 		if raw.UnitID != nil {
 			lineUnitID = *raw.UnitID
 		}
+		if lineUnitID != material.BaseUnitID {
+			if _, err := findRawConversion(material.ID, lineUnitID, material.BaseUnitID); err != nil {
+				return fmt.Errorf("для сырья %s нет коэффициента перевода из выбранной ЕИ в базовую ЕИ", material.Name)
+			}
+		}
 		liters, err := convertRawQuantity(raw.Quantity, material.ID, lineUnitID, "л")
 		if err == nil {
 			literRawTotal += liters
@@ -255,6 +260,13 @@ func replaceRecipeLines(tx *gorm.DB, recipeID uint, input recipeInput) error {
 	return tx.Create(&materialItems).Error
 }
 
+func findRawConversion(rawID uint, fromUnitID uint, toUnitID uint) (models.UnitConversion, error) {
+	var conversion models.UnitConversion
+	err := database.DB.Where("nomenclature_type = ? AND from_unit_id = ? AND to_unit_id = ? AND (item_id = ? OR item_id IS NULL)", models.NomenclatureTypeRaw, fromUnitID, toUnitID, rawID).
+		Order("item_id IS NULL").First(&conversion).Error
+	return conversion, err
+}
+
 func convertRawQuantity(quantity float64, rawID uint, fromUnitID uint, toUnitName string) (float64, error) {
 	var toUnit models.UnitOfMeasure
 	if err := database.DB.Where("LOWER(name) IN ?", []string{strings.ToLower(toUnitName), "литр", "литры", "l"}).First(&toUnit).Error; err != nil {
@@ -263,9 +275,8 @@ func convertRawQuantity(quantity float64, rawID uint, fromUnitID uint, toUnitNam
 	if fromUnitID == toUnit.ID {
 		return quantity, nil
 	}
-	var conversion models.UnitConversion
-	if err := database.DB.Where("nomenclature_type = ? AND from_unit_id = ? AND to_unit_id = ? AND (item_id = ? OR item_id IS NULL)", models.NomenclatureTypeRaw, fromUnitID, toUnit.ID, rawID).
-		Order("item_id IS NULL").First(&conversion).Error; err != nil {
+	conversion, err := findRawConversion(rawID, fromUnitID, toUnit.ID)
+	if err != nil {
 		return 0, err
 	}
 	return quantity * conversion.Coefficient, nil
