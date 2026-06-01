@@ -9,36 +9,55 @@ import dayjs from 'dayjs'
 const { Text } = Typography
 
 type InvoiceKind = 'mixed_receipt' | 'raw_issue' | 'material_issue' | 'finished_shipment'
+type TransferItemKind = 'raw' | 'material' | 'finished'
 
 export default function WarehousePage() {
   const [rawStock, setRawStock] = useState<any[]>([])
   const [materialStock, setMaterialStock] = useState<any[]>([])
+  const [productionRawStock, setProductionRawStock] = useState<any[]>([])
+  const [productionMaterialStock, setProductionMaterialStock] = useState<any[]>([])
+  const [productionFinishedStock, setProductionFinishedStock] = useState<any[]>([])
+  const [mainFinishedStock, setMainFinishedStock] = useState<any[]>([])
   const [rawMaterials, setRawMaterials] = useState<any[]>([])
   const [materials, setMaterials] = useState<any[]>([])
   const [finishedProducts, setFinishedProducts] = useState<any[]>([])
+  const [units, setUnits] = useState<any[]>([])
   const [invoices, setInvoices] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
+  const [transferOpen, setTransferOpen] = useState(false)
   const [invoiceType, setInvoiceType] = useState<InvoiceKind>('mixed_receipt')
   const [form] = Form.useForm()
+  const [transferForm] = Form.useForm()
+  const watchedTransferType = Form.useWatch('item_type', transferForm) as TransferItemKind | undefined
   const watchedItems = Form.useWatch('items', form) || []
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const [rawStockRes, materialStockRes, rawRes, materialsRes, fpRes, invoicesRes] = await Promise.all([
+      const [rawStockRes, materialStockRes, prodRawRes, prodMaterialRes, prodFinishedRes, mainFinishedRes, rawRes, materialsRes, fpRes, unitsRes, invoicesRes] = await Promise.all([
         api.get('/api/v1/main-stock/raw'),
         api.get('/api/v1/main-stock/materials'),
+        api.get('/api/v1/production-stock/raw'),
+        api.get('/api/v1/production-stock/materials'),
+        api.get('/api/v1/production-stock/finished'),
+        api.get('/api/v1/main-stock/finished'),
         api.get('/api/v1/raw-materials'),
         api.get('/api/v1/materials'),
         api.get('/api/v1/finished-products'),
+        api.get('/api/v1/units'),
         api.get('/api/v1/invoices'),
       ])
       setRawStock(rawStockRes.data)
       setMaterialStock(materialStockRes.data)
+      setProductionRawStock(prodRawRes.data)
+      setProductionMaterialStock(prodMaterialRes.data)
+      setProductionFinishedStock(prodFinishedRes.data)
+      setMainFinishedStock(mainFinishedRes.data)
       setRawMaterials(rawRes.data)
       setMaterials(materialsRes.data)
       setFinishedProducts(fpRes.data)
+      setUnits(unitsRes.data)
       setInvoices(invoicesRes.data)
     } catch (e: any) {
       message.error(e?.response?.data?.error || 'Ошибка загрузки складских данных')
@@ -82,6 +101,32 @@ export default function WarehousePage() {
     } catch (e: any) { message.error(e?.response?.data?.error || 'Ошибка подтверждения') }
   }
 
+
+  const openTransfer = (itemType: TransferItemKind = 'raw') => {
+    transferForm.resetFields()
+    transferForm.setFieldsValue({ item_type: itemType, direction: 'main_to_production', quantity: 1 })
+    setTransferOpen(true)
+  }
+
+  const saveTransfer = async () => {
+    try {
+      const values = await transferForm.validateFields()
+      await api.post('/api/v1/stock/transfers', values)
+      message.success('Перемещение выполнено')
+      setTransferOpen(false)
+      fetchData()
+    } catch (e: any) {
+      if (e?.response?.data?.error) message.error(e.response.data.error)
+    }
+  }
+
+  const transferBalanceHint = (type?: TransferItemKind) => {
+    if (type === 'raw') return `Основной склад: ${rawStock.length} поз.; производство: ${productionRawStock.length} поз.`
+    if (type === 'material') return `Основной склад: ${materialStock.length} поз.; производство: ${productionMaterialStock.length} поз.`
+    if (type === 'finished') return `Склад ГП: ${mainFinishedStock.length} поз.; производство: ${productionFinishedStock.length} поз.`
+    return 'Выберите тип позиции'
+  }
+
   const itemOptions = (type: string) => {
     if (type === 'raw') return rawMaterials.map((item) => ({ label: item.name, value: item.id }))
     if (type === 'material') return materials.map((item) => ({ label: item.name, value: item.id }))
@@ -102,6 +147,7 @@ export default function WarehousePage() {
         <Col xs={24} md={6}><Button block size="large" onClick={() => openInvoice('raw_issue')}>Расход сырья</Button></Col>
         <Col xs={24} md={6}><Button block size="large" onClick={() => openInvoice('material_issue')}>Расход материалов</Button></Col>
         <Col xs={24} md={6}><Button block danger size="large" onClick={() => openInvoice('finished_shipment')}>Отгрузка ГП</Button></Col>
+        <Col xs={24}><Button block size="large" onClick={() => openTransfer('raw')}>Ручное перемещение между складами</Button></Col>
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
@@ -165,7 +211,7 @@ export default function WarehousePage() {
                     <Select showSearch optionFilterProp="label" placeholder="Позиция" options={itemOptions(type)} />
                   </Form.Item>
                   <Form.Item {...field} name={[field.name, 'quantity']} rules={[{ required: true }]}>
-                    <InputNumber min={0.0001} style={{ width: '100%' }} placeholder="Количество" />
+                    <InputNumber min={0.0001} style={{ width: '100%' }} placeholder={invoiceType === 'finished_shipment' ? 'Паллеты' : 'Количество'} />
                   </Form.Item>
                   <Button danger icon={<DeleteOutlined />} onClick={() => remove(field.name)} />
                 </div>
@@ -173,6 +219,21 @@ export default function WarehousePage() {
               <Button icon={<PlusOutlined />} onClick={() => add({ item_type: invoiceType === 'material_issue' ? 'material' : invoiceType === 'finished_shipment' ? 'finished' : 'raw' })}>Добавить строку</Button>
             </div>}
           </Form.List>
+        </Form>
+      </Modal>
+
+      <Modal title="Ручное перемещение между складами" open={transferOpen} onOk={saveTransfer} onCancel={() => setTransferOpen(false)} okText="Переместить" cancelText="Отмена" width={720}>
+        <Form form={transferForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Row gutter={12}>
+            <Col xs={24} md={8}><Form.Item name="item_type" label="Тип позиции" rules={[{ required: true }]}><Select options={[{ label: 'Сырьё', value: 'raw' }, { label: 'Материал', value: 'material' }, { label: 'ГП (паллеты)', value: 'finished' }]} /></Form.Item></Col>
+            <Col xs={24} md={16}><Form.Item name="direction" label="Направление" rules={[{ required: true }]}><Select options={[{ label: 'Основной склад → производство', value: 'main_to_production' }, { label: 'Производство → основной склад', value: 'production_to_main' }]} /></Form.Item></Col>
+          </Row>
+          <Text type="secondary">{transferBalanceHint(watchedTransferType)}</Text>
+          <Row gutter={12} style={{ marginTop: 12 }}>
+            <Col xs={24} md={12}><Form.Item name="item_id" label="Позиция" rules={[{ required: true }]}><Select showSearch optionFilterProp="label" placeholder="Позиция" options={itemOptions(watchedTransferType || 'raw')} /></Form.Item></Col>
+            <Col xs={24} md={6}><Form.Item name="quantity" label={watchedTransferType === 'finished' ? 'Паллеты' : 'Количество'} rules={[{ required: true }]}><InputNumber min={0.0001} style={{ width: '100%' }} /></Form.Item></Col>
+            {watchedTransferType === 'raw' && <Col xs={24} md={6}><Form.Item name="unit_id" label="ЕИ производства"><Select allowClear showSearch optionFilterProp="label" placeholder="Базовая" options={units.map((u) => ({ label: u.name, value: u.id }))} /></Form.Item></Col>}
+          </Row>
         </Form>
       </Modal>
     </div>
