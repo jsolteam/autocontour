@@ -84,11 +84,13 @@ func main() {
 	api.GET("/invoices", handlers.ListInvoices)
 	api.POST("/invoices", handlers.CreateStockInvoice)
 	api.POST("/invoices/:id/confirm", handlers.ConfirmStockInvoice)
+	api.POST("/invoices/:id/cancel", handlers.CancelStockInvoice)
 	api.GET("/reports/balances", handlers.BalanceReport)
 	api.GET("/reports/receipts", handlers.ReceiptsReport)
 	api.GET("/production/plans", handlers.ListProductionPlans)
 	api.POST("/production/initialize-plan", handlers.InitializeProductionPlan)
 	api.POST("/production/plans/:id/complete", handlers.CompleteProductionPlan)
+	api.POST("/production/plans/:id/cancel", handlers.CancelProductionPlan)
 	api.POST("/production/pack-pallets", handlers.PackFinishedToPallets)
 
 	// Finished Products
@@ -120,6 +122,8 @@ func main() {
 
 	// Audit logs
 	api.GET("/audit", handlers.ListAuditLogs)
+	api.GET("/settings", handlers.GetSettings)
+	api.PUT("/settings", handlers.UpdateSettings)
 
 	log.Printf("🚀 Авто-Контур запущен на порту %s", config.App.ServerPort)
 	if err := r.Run(":" + config.App.ServerPort); err != nil {

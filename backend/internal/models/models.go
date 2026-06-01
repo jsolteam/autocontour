@@ -163,6 +163,16 @@ type MainStockMaterial struct {
 }
 
 // ─────────────────────────────────────────────
+//  Глобальные настройки приложения
+// ─────────────────────────────────────────────
+
+type AppSetting struct {
+	Key       string    `gorm:"primaryKey;size:64" json:"key"`
+	Value     string    `gorm:"type:text;not null" json:"value"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ─────────────────────────────────────────────
 //  Audit log
 // ─────────────────────────────────────────────
 
@@ -228,6 +238,7 @@ type StockInvoiceStatus string
 const (
 	StockInvoicePending   StockInvoiceStatus = "PENDING"
 	StockInvoiceConfirmed StockInvoiceStatus = "CONFIRMED"
+	StockInvoiceCanceled  StockInvoiceStatus = "CANCELED"
 )
 
 type StockInvoice struct {
@@ -258,6 +269,7 @@ type ProductionPlanStatus string
 const (
 	ProductionPlanInProgress ProductionPlanStatus = "IN_PROGRESS"
 	ProductionPlanCompleted  ProductionPlanStatus = "COMPLETED"
+	ProductionPlanCanceled   ProductionPlanStatus = "CANCELED"
 )
 
 type ProductionPlan struct {

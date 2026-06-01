@@ -19,7 +19,7 @@ type initializePlanInput struct {
 
 func ListProductionPlans(c *gin.Context) {
 	var items []models.ProductionPlan
-	q := database.DB.Preload("Recipe").Preload("FinishedProduct.BaseUnit").Order("created_at DESC")
+	q := database.DB.Preload("Recipe.RawItems.RawMaterial.BaseUnit").Preload("Recipe.RawItems.Unit").Preload("Recipe.MaterialItems.ProductionMaterial.BaseUnit").Preload("FinishedProduct.BaseUnit").Order("created_at DESC")
 	if status := c.Query("status"); status != "" {
 		q = q.Where("status = ?", status)
 	}
@@ -47,6 +47,14 @@ func InitializeProductionPlan(c *gin.Context) {
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		for _, line := range recipe.RawItems {
 			required := line.Quantity * factor
+			stockUnitID := line.RawMaterial.BaseUnitID
+			if line.UnitID != nil && *line.UnitID != stockUnitID {
+				converted, err := convertRawQuantityToUnit(required, line.RawMaterialID, *line.UnitID, stockUnitID)
+				if err != nil {
+					return fmt.Errorf("нет коэффициента перевода для сырья %s", line.RawMaterial.Name)
+				}
+				required = converted
+			}
 			var prod models.ProductionStockRaw
 			tx.Where("raw_material_id = ?", line.RawMaterialID).FirstOrInit(&prod)
 			availableProd := prod.CurrentStock
@@ -103,7 +111,7 @@ func InitializeProductionPlan(c *gin.Context) {
 		return
 	}
 	actorID, _ := c.Get("userID")
-	services.LogAction(actorID.(uint), "Запуск производственного плана", fmt.Sprintf("Рецепт ID=%d, цель=%.4g", input.RecipeID, input.TargetQuantity))
+	services.LogAction(actorID.(uint), "Запуск производственного плана", fmt.Sprintf("Рецепт %s, цель=%.4g", recipe.Name, input.TargetQuantity))
 	c.JSON(http.StatusCreated, gin.H{"message": "План запущен"})
 }
 
@@ -118,10 +126,22 @@ func CompleteProductionPlan(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "План уже завершен"})
 		return
 	}
+	if plan.Status == models.ProductionPlanCanceled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Отмененный план нельзя завершить"})
+		return
+	}
 	factor := plan.TargetQuantity / plan.Recipe.OutputQuantity
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		for _, line := range plan.Recipe.RawItems {
 			required := line.Quantity * factor
+			stockUnitID := line.RawMaterial.BaseUnitID
+			if line.UnitID != nil && *line.UnitID != stockUnitID {
+				converted, err := convertRawQuantityToUnit(required, line.RawMaterialID, *line.UnitID, stockUnitID)
+				if err != nil {
+					return fmt.Errorf("нет коэффициента перевода для сырья %s", line.RawMaterial.Name)
+				}
+				required = converted
+			}
 			var stock models.ProductionStockRaw
 			if err := tx.Where("raw_material_id = ?", line.RawMaterialID).First(&stock).Error; err != nil {
 				return fmt.Errorf("на складе производства нет сырья %s", line.RawMaterial.Name)
@@ -163,7 +183,7 @@ func CompleteProductionPlan(c *gin.Context) {
 		return
 	}
 	actorID, _ := c.Get("userID")
-	services.LogAction(actorID.(uint), "Завершение производственного плана", fmt.Sprintf("План ID=%s", id))
+	services.LogAction(actorID.(uint), "Завершение производственного плана", fmt.Sprintf("План #%s, продукция %s", id, plan.FinishedProduct.Name))
 	c.JSON(http.StatusOK, gin.H{"message": "План завершен"})
 }
 
@@ -214,4 +234,40 @@ func PackFinishedToPallets(c *gin.Context) {
 	actorID, _ := c.Get("userID")
 	services.LogAction(actorID.(uint), "Упаковка ГП в паллеты", fmt.Sprintf("ГП ID=%d, паллет=%.4g", input.FinishedProductID, input.Pallets))
 	c.JSON(http.StatusOK, gin.H{"message": "ГП упакована в паллеты"})
+}
+
+func convertRawQuantityToUnit(quantity float64, rawID uint, fromUnitID uint, toUnitID uint) (float64, error) {
+	if fromUnitID == toUnitID {
+		return quantity, nil
+	}
+	conversion, err := findRawConversion(rawID, fromUnitID, toUnitID)
+	if err != nil {
+		return 0, err
+	}
+	return quantity * conversion.Coefficient, nil
+}
+
+func CancelProductionPlan(c *gin.Context) {
+	id := c.Param("id")
+	var plan models.ProductionPlan
+	if err := database.DB.Preload("FinishedProduct").First(&plan, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "План не найден"})
+		return
+	}
+	if plan.Status == models.ProductionPlanCompleted {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Завершенный план нельзя отменить"})
+		return
+	}
+	if plan.Status == models.ProductionPlanCanceled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "План уже отменен"})
+		return
+	}
+	plan.Status = models.ProductionPlanCanceled
+	if err := database.DB.Save(&plan).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось отменить план"})
+		return
+	}
+	actorID, _ := c.Get("userID")
+	services.LogAction(actorID.(uint), "Отмена производственного плана", fmt.Sprintf("План #%s, продукция %s", id, plan.FinishedProduct.Name))
+	c.JSON(http.StatusOK, plan)
 }

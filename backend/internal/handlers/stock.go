@@ -222,6 +222,10 @@ func ConfirmStockInvoice(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Накладная уже подтверждена"})
 		return
 	}
+	if invoice.Status == models.StockInvoiceCanceled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Отмененную накладную нельзя подтвердить"})
+		return
+	}
 	now := time.Now()
 	err := database.DB.Transaction(func(tx *gorm.DB) error {
 		for _, item := range invoice.Items {
@@ -284,7 +288,32 @@ func ConfirmStockInvoice(c *gin.Context) {
 		return
 	}
 	actorID, _ := c.Get("userID")
-	services.LogAction(actorID.(uint), "Подтверждение складской операции", fmt.Sprintf("Накладная ID=%s", id))
+	services.LogAction(actorID.(uint), "Подтверждение складской операции", fmt.Sprintf("Накладная %s", invoice.Number))
+	c.JSON(http.StatusOK, invoice)
+}
+
+func CancelStockInvoice(c *gin.Context) {
+	id := c.Param("id")
+	var invoice models.StockInvoice
+	if err := database.DB.First(&invoice, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Накладная не найдена"})
+		return
+	}
+	if invoice.Status == models.StockInvoiceConfirmed {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Подтвержденную накладную нельзя отменить"})
+		return
+	}
+	if invoice.Status == models.StockInvoiceCanceled {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Накладная уже отменена"})
+		return
+	}
+	invoice.Status = models.StockInvoiceCanceled
+	if err := database.DB.Save(&invoice).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Не удалось отменить накладную"})
+		return
+	}
+	actorID, _ := c.Get("userID")
+	services.LogAction(actorID.(uint), "Отмена складской операции", fmt.Sprintf("Накладная %s", invoice.Number))
 	c.JSON(http.StatusOK, invoice)
 }
 
@@ -310,23 +339,25 @@ func BalanceReport(c *gin.Context) {
 		ProductionStock float64 `json:"production_stock"`
 		Total           float64 `json:"total"`
 		Unit            string  `json:"unit"`
+		TotalPallets    float64 `json:"total_pallets"`
+		MainPallets     float64 `json:"main_pallets"`
 	}
 	rows := []row{}
 	database.DB.Raw(`
 		SELECT rm.name, 'raw' AS type, COALESCE(rc.name,'—') category, COALESCE(ms.current_stock,0) main_stock, COALESCE(ps.current_stock,0) production_stock,
-		COALESCE(ms.current_stock,0)+COALESCE(ps.current_stock,0) total, u.name unit
+		COALESCE(ms.current_stock,0)+COALESCE(ps.current_stock,0) total, u.name unit, 0 total_pallets, 0 main_pallets
 		FROM raw_materials rm JOIN unit_of_measures u ON u.id=rm.base_unit_id
 		LEFT JOIN raw_material_categories rc ON rc.id=rm.category_id
 		LEFT JOIN main_stock_raws ms ON ms.raw_material_id=rm.id
 		LEFT JOIN production_stock_raws ps ON ps.raw_material_id=rm.id
 		UNION ALL
-		SELECT pm.name, 'material', COALESCE(pc.name,'—'), COALESCE(ms.current_stock,0), COALESCE(ps.current_stock,0), COALESCE(ms.current_stock,0)+COALESCE(ps.current_stock,0), u.name
+		SELECT pm.name, 'material', COALESCE(pc.name,'—'), COALESCE(ms.current_stock,0), COALESCE(ps.current_stock,0), COALESCE(ms.current_stock,0)+COALESCE(ps.current_stock,0), u.name, 0, 0
 		FROM production_materials pm JOIN unit_of_measures u ON u.id=pm.base_unit_id
 		LEFT JOIN production_material_categories pc ON pc.id=pm.category_id
 		LEFT JOIN main_stock_materials ms ON ms.production_material_id=pm.id
 		LEFT JOIN production_stock_materials ps ON ps.production_material_id=pm.id
 		UNION ALL
-		SELECT fp.name, 'finished', 'Готовая продукция', COALESCE(ms.current_stock_units,0), COALESCE(ps.current_stock_units,0), COALESCE(ms.current_stock_units,0)+COALESCE(ps.current_stock_units,0), u.name
+		SELECT fp.name, 'finished', 'Готовая продукция', COALESCE(ms.current_stock_units,0), COALESCE(ps.current_stock_units,0), COALESCE(ms.current_stock_units,0)+COALESCE(ps.current_stock_units,0), u.name, COALESCE(ms.current_stock_pallets,0), COALESCE(ms.current_stock_pallets,0)
 		FROM finished_products fp JOIN unit_of_measures u ON u.id=fp.base_unit_id
 		LEFT JOIN main_stock_finisheds ms ON ms.finished_product_id=fp.id
 		LEFT JOIN production_stock_finisheds ps ON ps.finished_product_id=fp.id
