@@ -390,17 +390,6 @@ export function NomenclaturePage() {
   )
 }
 
-export function NomenclaturePage() {
-  return (
-    <Tabs
-      items={[
-        { key: 'raw', label: 'Сырьё', children: <RawMaterialsPage /> },
-        { key: 'materials', label: 'Материалы', children: <MaterialsPage /> },
-      ]}
-    />
-  )
-}
-
 export function FinishedProductsPage() {
   return (
     <CatalogPage

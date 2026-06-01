@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Row, Col, Typography, Tag, Button, Table, InputNumber, Modal, Form, Select, message } from 'antd'
+import { Row, Col, Typography, Tag, Button, Table, InputNumber, Input, Modal, Form, Select, message } from 'antd'
 import {
   InboxOutlined, NodeIndexOutlined, ShopOutlined,
   ExperimentOutlined, ArrowRightOutlined, DatabaseOutlined,
@@ -72,7 +72,6 @@ export default function WarehousePage() {
     if (record) {
       form.setFieldsValue({
         item_id: type === 'raw' ? record.raw_material_id : record.production_material_id,
-        current_stock: record.current_stock,
       })
     }
   }
@@ -81,11 +80,9 @@ export default function WarehousePage() {
     if (!modalType) return
     try {
       const values = await form.validateFields()
-      const payload = modalType === 'raw'
-        ? { raw_material_id: values.item_id, current_stock: values.current_stock }
-        : { production_material_id: values.item_id, current_stock: values.current_stock }
-      await api.post(modalType === 'raw' ? '/api/v1/main-stock/raw' : '/api/v1/main-stock/materials', payload)
-      message.success('Остаток обновлён')
+      const payload = { number: values.invoice_number, items: [{ item_id: values.item_id, quantity: values.current_stock }] }
+      await api.post(modalType === 'raw' ? '/api/v1/invoices/raw-receipts' : '/api/v1/invoices/material-receipts', payload)
+      message.success('Приходная накладная проведена')
       setModalType(null)
       fetchData()
     } catch (e: any) {
@@ -110,7 +107,7 @@ export default function WarehousePage() {
                 <div className="warehouse-panel__title"><InboxOutlined /> Основной склад сырья</div>
                 <Text type="secondary">Химические компоненты, жидкости и реактивы в базовых ЕИ.</Text>
               </div>
-              <Button type="primary" onClick={() => openStockModal('raw')}>Задать остаток</Button>
+              <Button type="primary" onClick={() => openStockModal('raw')}>Оформить приход</Button>
             </div>
             <div className="desktop-table">
               <Table
@@ -128,7 +125,7 @@ export default function WarehousePage() {
                       <strong>{row.current_stock} {row.raw_material?.base_unit?.name}</strong>
                     ),
                   },
-                  { title: '', width: 92, render: (_: any, row: any) => <Button onClick={() => openStockModal('raw', row)}>Изменить</Button> },
+                  { title: '', width: 92, render: (_: any, row: any) => <Button onClick={() => openStockModal('raw', row)}>Пополнить</Button> },
                 ]}
               />
             </div>
@@ -139,7 +136,7 @@ export default function WarehousePage() {
                   <div className="item-detail">Категория: {row.raw_material?.category?.name ?? '—'}</div>
                   <div className="item-detail">Остаток: <strong>{row.current_stock} {row.raw_material?.base_unit?.name}</strong></div>
                   <div className="item-actions">
-                    <Button onClick={() => openStockModal('raw', row)} style={{ flex: 1, height: 48 }}>Изменить</Button>
+                    <Button onClick={() => openStockModal('raw', row)} style={{ flex: 1, height: 48 }}>Пополнить</Button>
                   </div>
                 </div>
               ))}
@@ -153,7 +150,7 @@ export default function WarehousePage() {
                 <div className="warehouse-panel__title"><DatabaseOutlined /> Основной склад материалов</div>
                 <Text type="secondary">Тара, крышки, этикетки, коробки и паллеты в собственном потоке.</Text>
               </div>
-              <Button type="primary" onClick={() => openStockModal('materials')}>Задать остаток</Button>
+              <Button type="primary" onClick={() => openStockModal('materials')}>Оформить приход</Button>
             </div>
             <div className="desktop-table">
               <Table
@@ -171,7 +168,7 @@ export default function WarehousePage() {
                       <strong>{row.current_stock} {row.production_material?.base_unit?.name}</strong>
                     ),
                   },
-                  { title: '', width: 92, render: (_: any, row: any) => <Button onClick={() => openStockModal('materials', row)}>Изменить</Button> },
+                  { title: '', width: 92, render: (_: any, row: any) => <Button onClick={() => openStockModal('materials', row)}>Пополнить</Button> },
                 ]}
               />
             </div>
@@ -182,7 +179,7 @@ export default function WarehousePage() {
                   <div className="item-detail">Категория: {row.production_material?.category?.name ?? '—'}</div>
                   <div className="item-detail">Остаток: <strong>{row.current_stock} {row.production_material?.base_unit?.name}</strong></div>
                   <div className="item-actions">
-                    <Button onClick={() => openStockModal('materials', row)} style={{ flex: 1, height: 48 }}>Изменить</Button>
+                    <Button onClick={() => openStockModal('materials', row)} style={{ flex: 1, height: 48 }}>Пополнить</Button>
                   </div>
                 </div>
               ))}
@@ -248,7 +245,7 @@ export default function WarehousePage() {
       </Row>
 
       <Modal
-        title={modalType === 'raw' ? 'Остаток основного склада сырья' : 'Остаток основного склада материалов'}
+        title={modalType === 'raw' ? 'Приход сырья по накладной' : 'Приход материалов по накладной'}
         open={modalType !== null}
         onOk={saveStock}
         onCancel={() => setModalType(null)}
@@ -258,6 +255,9 @@ export default function WarehousePage() {
         cancelButtonProps={{ size: 'large', style: { height: 48 } }}
       >
         <Form form={form} layout="vertical" style={{ marginTop: 20 }}>
+          <Form.Item name="invoice_number" label="Номер накладной" rules={[{ required: true, message: 'Введите номер накладной' }]}>
+            <Input size="large" placeholder="Например: INV-2026-001" />
+          </Form.Item>
           <Form.Item name="item_id" label={modalType === 'raw' ? 'Сырьё' : 'Материал'} rules={[{ required: true, message: 'Выберите позицию' }]}>
             <Select
               size="large"
@@ -267,7 +267,7 @@ export default function WarehousePage() {
               options={(modalType === 'raw' ? rawMaterials : materials).map((item) => ({ label: item.name, value: item.id }))}
             />
           </Form.Item>
-          <Form.Item name="current_stock" label="Текущий остаток" rules={[{ required: true, message: 'Укажите остаток' }]}>
+          <Form.Item name="current_stock" label="Количество прихода" rules={[{ required: true, message: 'Укажите количество прихода' }]}>
             <InputNumber size="large" style={{ width: '100%' }} min={0} step={0.1} />
           </Form.Item>
         </Form>

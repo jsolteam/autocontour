@@ -54,6 +54,13 @@ func Migrate() {
 		&models.Recipe{},
 		&models.RecipeRawMaterial{},
 		&models.RecipeProductionMaterial{},
+		&models.MainStockFinished{},
+		&models.ProductionStockRaw{},
+		&models.ProductionStockMaterial{},
+		&models.ProductionStockFinished{},
+		&models.StockInvoice{},
+		&models.StockInvoiceItem{},
+		&models.ProductionPlan{},
 		&models.AuditLog{},
 	)
 	if err != nil {
@@ -162,6 +169,17 @@ func seed() {
 		{Method: "PUT", Path: "/api/v1/roles"},
 		{Method: "DELETE", Path: "/api/v1/roles"},
 		{Method: "GET", Path: "/api/v1/permissions"},
+		{Method: "GET", Path: "/api/v1/production-stock/raw"},
+		{Method: "GET", Path: "/api/v1/production-stock/materials"},
+		{Method: "GET", Path: "/api/v1/production-stock/finished"},
+		{Method: "GET", Path: "/api/v1/main-stock/finished"},
+		{Method: "POST", Path: "/api/v1/invoices/raw-receipts"},
+		{Method: "POST", Path: "/api/v1/invoices/material-receipts"},
+		{Method: "GET", Path: "/api/v1/invoices"},
+		{Method: "GET", Path: "/api/v1/reports/balances"},
+		{Method: "GET", Path: "/api/v1/reports/receipts"},
+		{Method: "GET", Path: "/api/v1/production/plans"},
+		{Method: "POST", Path: "/api/v1/production/initialize-plan"},
 		{Method: "GET", Path: "/api/v1/audit"},
 	}
 	var createdPerms []models.Permission

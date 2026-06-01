@@ -453,7 +453,7 @@ html, body, #root {
 
 .recipe-line {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px 40px;
+  grid-template-columns: minmax(0, 1fr) 130px 110px 40px;
   gap: 8px;
   align-items: start;
 }
@@ -490,6 +490,35 @@ html, body, #root {
   .recipe-line .ant-btn,
   .recipe-line--material .ant-btn {
     width: 100%;
+    min-height: 44px;
+  }
+}
+
+/* Normalize dashboard/menu icons so SVG glyphs never stretch or squash. */
+.anticon,
+.anticon svg {
+  width: 1em;
+  height: 1em;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .ant-input-number,
+  .ant-input-number-affix-wrapper,
+  .ant-select,
+  .ant-select-selector {
+    width: 100% !important;
+  }
+
+  .ant-input-number .ant-input-number-input,
+  .ant-input-number-input {
+    height: 42px !important;
+    line-height: 42px !important;
+  }
+
+  .ant-form-item-control-input,
+  .ant-form-item-control-input-content {
     min-height: 44px;
   }
 }

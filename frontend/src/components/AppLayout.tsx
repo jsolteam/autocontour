@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Layout, Menu, Button, Typography, Avatar, Dropdown, Tag, Grid } from 'antd'
+import { Layout, Menu, Button, Typography, Avatar, Dropdown, Grid } from 'antd'
 import {
   DashboardOutlined, AppstoreOutlined, InboxOutlined, UserOutlined,
   LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, AuditOutlined,
   TeamOutlined, ControlOutlined, SafetyCertificateOutlined, ShopOutlined,
-  SlidersOutlined, NodeIndexOutlined, ExperimentOutlined,
+  SlidersOutlined, NodeIndexOutlined, ExperimentOutlined, FileTextOutlined, TableOutlined,
 } from '@ant-design/icons'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
@@ -57,14 +57,20 @@ export default function AppLayout() {
     {
       key: '/warehouse',
       icon: <InboxOutlined />,
-      label: (
-        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-          Склад
-          <Tag style={{ fontSize: 9, lineHeight: '14px', height: 14, padding: '0 4px', marginLeft: 4 }}>
-            скоро
-          </Tag>
-        </span>
-      ),
+      label: 'Накладные и склад',
+    },
+    {
+      key: 'stockTables',
+      icon: <TableOutlined />,
+      label: 'Основные таблицы',
+      children: [
+        { key: '/stock-tables', icon: <TableOutlined />, label: 'Все остатки' },
+      ],
+    },
+    {
+      key: '/reports',
+      icon: <FileTextOutlined />,
+      label: 'Отчеты',
     },
     ...(isAdmin() ? [{
       key: 'admin',
@@ -114,7 +120,9 @@ export default function AppLayout() {
     '/finished-products': 'Готовая продукция',
     '/units': 'Единицы измерения',
     '/conversions': 'Коэффициенты перевода',
-    '/warehouse': 'Склад',
+    '/warehouse': 'Накладные и склад',
+    '/stock-tables': 'Основные таблицы',
+    '/reports': 'Отчеты',
     '/recipes': 'Рецепты',
     '/users': 'Пользователи',
     '/roles': 'Роли и права',
